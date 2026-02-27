@@ -20,7 +20,7 @@ const ANALYSIS_HEIGHT = 720
 
 export default function CompanionApp() {
   const { stream, status, error, startSharing, stopSharing } = useScreenShare()
-  const { outputCanvasRef, pipStatus, togglePiP } = usePiP()
+  const { outputCanvasRef, pipStatus, pipError, togglePiP } = usePiP()
   const { analysisCanvasRef, foundText, isProcessing } = useVision(stream)
   const { currentInstruction, currentStep } = useGuide(foundText)
 
@@ -96,7 +96,10 @@ export default function CompanionApp() {
       </div>
 
       {error && (
-        <p className="text-red-400 text-sm">Error: {error}</p>
+        <p className="text-red-400 text-sm">Screen share error: {error}</p>
+      )}
+      {pipError && (
+        <p className="text-orange-400 text-sm">PiP error: {pipError}</p>
       )}
 
       {/* PiP preview canvas (visible on page as debug preview) */}

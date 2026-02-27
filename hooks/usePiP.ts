@@ -7,6 +7,7 @@ import { CANVAS_WIDTH, CANVAS_HEIGHT } from '@/lib/drawCanvas'
 interface UsePiPReturn {
   outputCanvasRef: React.RefObject<HTMLCanvasElement>
   pipStatus: PiPStatus
+  pipError: string | null
   togglePiP: () => Promise<void>
 }
 
@@ -14,9 +15,11 @@ export function usePiP(): UsePiPReturn {
   const outputCanvasRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const [pipStatus, setPipStatus] = useState<PiPStatus>('inactive')
+  const [pipError, setPipError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!document.pictureInPictureEnabled) {
+    // document.pictureInPictureEnabled may be absent in older browsers
+    if (document.pictureInPictureEnabled === false) {
       setPipStatus('unsupported')
       return
     }
@@ -53,17 +56,28 @@ export function usePiP(): UsePiPReturn {
       return
     }
 
+    setPipError(null)
     try {
-      // Capture canvas stream and wire up video
       const stream = canvas.captureStream(30)
       video.srcObject = stream
-      await video.play()
+
+      // Wait for 'playing' — required before requestPictureInPicture.
+      // Do NOT await a rAF here: Chrome invalidates the user-gesture token
+      // across macro-task boundaries, which would silently block PiP.
+      await new Promise<void>((resolve, reject) => {
+        video.addEventListener('playing', () => resolve(), { once: true })
+        video.addEventListener('error', (e) => reject(e), { once: true })
+        video.play().catch(reject)
+      })
+
       await video.requestPictureInPicture()
       setPipStatus('active')
     } catch (err) {
+      const msg = err instanceof Error ? `${err.name}: ${err.message}` : String(err)
+      setPipError(msg)
       console.error('PiP error:', err)
     }
   }, [])
 
-  return { outputCanvasRef, pipStatus, togglePiP }
+  return { outputCanvasRef, pipStatus, pipError, togglePiP }
 }

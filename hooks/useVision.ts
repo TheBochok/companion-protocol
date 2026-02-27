@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, useEffect } from 'react'
-import { createWorker } from 'tesseract.js'
+import { createWorker, PSM } from 'tesseract.js'
 
 const ANALYSIS_WIDTH = 1280
 const ANALYSIS_HEIGHT = 720
@@ -25,6 +25,8 @@ export function useVision(stream: MediaStream | null): UseVisionReturn {
 
     async function initWorker() {
       const worker = await createWorker('eng', 1)
+      // PSM.SPARSE_TEXT (11): finds text in arbitrary locations — best for screen UI
+      await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT })
       if (mounted) {
         workerRef.current = worker
       } else {
@@ -62,6 +64,16 @@ export function useVision(stream: MediaStream | null): UseVisionReturn {
     document.body.appendChild(video)
     video.play().catch(console.error)
 
+    // Once we know the stream's real dimensions, size the analysis canvas to match.
+    // More native pixels → better OCR accuracy (especially on Retina screens).
+    video.addEventListener('loadedmetadata', () => {
+      const canvas = analysisCanvasRef.current
+      if (canvas && video.videoWidth > 0) {
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
+      }
+    }, { once: true })
+
     intervalRef.current = setInterval(async () => {
       const canvas = analysisCanvasRef.current
       const worker = workerRef.current
@@ -73,7 +85,11 @@ export function useVision(stream: MediaStream | null): UseVisionReturn {
 
       try {
         setIsProcessing(true)
-        ctx.drawImage(video, 0, 0, ANALYSIS_WIDTH, ANALYSIS_HEIGHT)
+        // Grayscale + contrast boost: Tesseract reads high-contrast B&W far better
+        // than raw colorful screen content
+        ctx.filter = 'grayscale(1) contrast(1.5)'
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+        ctx.filter = 'none'
         const result = await worker.recognize(canvas)
         setFoundText(result.data.text.toLowerCase().trim())
       } catch {

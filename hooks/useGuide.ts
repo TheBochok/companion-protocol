@@ -2,7 +2,6 @@
 
 import { useEffect } from 'react'
 import { useWorkflowStore } from '@/store/workflowStore'
-import { workflow } from '@/lib/workflow'
 
 interface UseGuideReturn {
   currentInstruction: string
@@ -10,17 +9,16 @@ interface UseGuideReturn {
 }
 
 export function useGuide(foundText: string): UseGuideReturn {
-  const { currentStep, currentInstruction, advance } = useWorkflowStore()
+  const { currentStep, currentInstruction, steps, advance } = useWorkflowStore()
 
   useEffect(() => {
     if (!foundText) return
-    if (currentStep >= workflow.length) return
-
-    const trigger = workflow[currentStep].trigger
-    if (foundText.includes(trigger)) {
+    if (currentStep >= steps.length) return
+    const trigger = steps[currentStep].trigger
+    if (trigger && foundText.includes(trigger)) {
       advance()
     }
-  }, [foundText, currentStep, advance])
+  }, [foundText, currentStep, steps, advance])
 
   return { currentInstruction, currentStep }
 }

@@ -1,18 +1,21 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useScreenShare } from '@/hooks/useScreenShare'
 import { usePiP } from '@/hooks/usePiP'
 import { useVision } from '@/hooks/useVision'
 import { useGuide } from '@/hooks/useGuide'
-import { workflow } from '@/lib/workflow'
+import { useCoordinateStore, getCropBox } from '@/store/coordinateStore'
+import { useFinder } from '@/hooks/useFinder'
+import { useWorkflowStore } from '@/store/workflowStore'
+import WorkflowEditor from '@/components/WorkflowEditor'
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
   drawHello,
-  drawInstruction,
   drawScanning,
   drawConnectionLost,
+  drawZoomedView,
 } from '@/lib/drawCanvas'
 
 const ANALYSIS_WIDTH = 1280
@@ -21,11 +24,51 @@ const ANALYSIS_HEIGHT = 720
 export default function CompanionApp() {
   const { stream, status, error, startSharing, stopSharing } = useScreenShare()
   const { outputCanvasRef, pipStatus, pipError, togglePiP } = usePiP()
-  const { analysisCanvasRef, foundText, isProcessing } = useVision(stream)
+  const { analysisCanvasRef, videoRef, foundText, foundWords, isProcessing } = useVision(stream)
   const { currentInstruction, currentStep } = useGuide(foundText)
+  const stepsLength = useWorkflowStore(s => s.steps.length)
+  useFinder(foundWords, 'search')
+  const { target } = useCoordinateStore()
 
-  // Canvas rendering loop
+  // Ref keeps the label fresh inside the rAF closure without restarting the loop
+  const instructionRef = useRef(currentInstruction)
+  useEffect(() => { instructionRef.current = currentInstruction }, [currentInstruction])
+
+  // Canvas loop — active whenever the stream is live
   useEffect(() => {
+    if (status !== 'active') return
+
+    const canvas = outputCanvasRef.current
+    const video = videoRef.current
+    if (!canvas) return
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    // No target yet — show a static "Searching..." frame and wait
+    if (!target || !video) {
+      drawScanning(ctx)
+      return
+    }
+
+    const cropBox = getCropBox(target)
+    let rafId: number
+
+    function draw() {
+      if (video!.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        drawZoomedView(ctx!, video!, target!, cropBox, instructionRef.current)
+      }
+      rafId = requestAnimationFrame(draw)
+    }
+
+    rafId = requestAnimationFrame(draw)
+    return () => cancelAnimationFrame(rafId)
+  }, [status, target, outputCanvasRef, videoRef])  // target in deps: restarts rAF whenever coordinates change
+
+  // Static canvas rendering — only for non-active states (active is handled by rAF loop)
+  useEffect(() => {
+    if (status === 'active') return
+
     const canvas = outputCanvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
@@ -33,21 +76,10 @@ export default function CompanionApp() {
 
     if (status === 'ended') {
       drawConnectionLost(ctx)
-      return
-    }
-
-    if (status !== 'active') {
+    } else {
       drawHello(ctx)
-      return
     }
-
-    if (isProcessing || !foundText) {
-      drawScanning(ctx)
-      return
-    }
-
-    drawInstruction(ctx, currentInstruction, currentStep + 1, workflow.length)
-  }, [status, isProcessing, foundText, currentInstruction, currentStep, outputCanvasRef])
+  }, [status, outputCanvasRef])
 
   // Keep "Hello World" timestamp updating when idle
   useEffect(() => {
@@ -57,9 +89,7 @@ export default function CompanionApp() {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    const id = setInterval(() => {
-      drawHello(ctx)
-    }, 1000)
+    const id = setInterval(() => { drawHello(ctx) }, 1000)
     drawHello(ctx)
     return () => clearInterval(id)
   }, [status, outputCanvasRef])
@@ -69,7 +99,7 @@ export default function CompanionApp() {
       <h1 className="text-3xl font-bold tracking-tight">Companion Protocol</h1>
 
       {/* Controls */}
-      <div className="flex gap-4">
+      <div className="flex gap-4 flex-wrap justify-center">
         {status === 'active' ? (
           <button
             onClick={stopSharing}
@@ -93,6 +123,7 @@ export default function CompanionApp() {
         >
           {pipStatus === 'active' ? 'Close Companion' : 'Toggle Companion Mode'}
         </button>
+
       </div>
 
       {error && (
@@ -136,10 +167,12 @@ export default function CompanionApp() {
           </span>
         </p>
         <p>
-          <span className="text-gray-500">Step {currentStep + 1} of {workflow.length}:</span>{' '}
+          <span className="text-gray-500">Step {currentStep + 1} of {stepsLength}:</span>{' '}
           <span className="text-white">{currentInstruction}</span>
         </p>
       </div>
+
+      <WorkflowEditor />
 
       {/* Hidden analysis canvas — sized for OCR resolution */}
       <canvas

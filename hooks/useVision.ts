@@ -1,103 +1,168 @@
 'use client'
 
 import { useRef, useState, useEffect } from 'react'
-import { createWorker, PSM } from 'tesseract.js'
+import { useCoordinateStore } from '@/store/coordinateStore'
 
-const ANALYSIS_WIDTH = 1280
-const ANALYSIS_HEIGHT = 720
+const DIFF_WIDTH = 64
+const DIFF_HEIGHT = 36
+const DIFF_INTERVAL = 150
+const PIXEL_DELTA = 25
+const CHANGE_THRESHOLD = 0.015
+const HEARTBEAT_MS = 4000
+
+const CAPTURE_MAX_W = 1920
+const CAPTURE_MAX_H = 1080
 
 interface UseVisionReturn {
   analysisCanvasRef: React.RefObject<HTMLCanvasElement>
-  foundText: string
+  videoRef: React.RefObject<HTMLVideoElement | null>
   isProcessing: boolean
+  currentInstruction: string
 }
 
-export function useVision(stream: MediaStream | null): UseVisionReturn {
+export function useVision(stream: MediaStream | null, goal: string): UseVisionReturn {
   const analysisCanvasRef = useRef<HTMLCanvasElement>(null)
-  const [foundText, setFoundText] = useState('')
+  const videoRef = useRef<HTMLVideoElement | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
-  const workerRef = useRef<Awaited<ReturnType<typeof createWorker>> | null>(null)
+  const [currentInstruction, setCurrentInstruction] = useState('')
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const setTarget = useCoordinateStore((s) => s.setTarget)
 
-  // Initialize Tesseract worker once
+  // Keep goal fresh inside the interval closure without restarting the loop
+  const goalRef = useRef(goal)
   useEffect(() => {
-    let mounted = true
-
-    async function initWorker() {
-      const worker = await createWorker('eng', 1)
-      // PSM.SPARSE_TEXT (11): finds text in arbitrary locations — best for screen UI
-      await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT })
-      if (mounted) {
-        workerRef.current = worker
-      } else {
-        await worker.terminate()
-      }
+    // Reset history when the goal changes
+    if (goalRef.current !== goal) {
+      historyRef.current = []
+      prevInstructionRef.current = ''
     }
+    goalRef.current = goal
+  }, [goal])
 
-    initWorker().catch(console.error)
+  // Accumulate completed steps: when instruction changes, the previous one was acted on
+  const historyRef = useRef<string[]>([])
+  const prevInstructionRef = useRef('')
+  const prevFrameRef = useRef('')
 
-    return () => {
-      mounted = false
-      workerRef.current?.terminate().catch(() => {})
-      workerRef.current = null
-    }
-  }, [])
-
-  // OCR loop — runs when stream is active
   useEffect(() => {
     if (!stream) {
       if (intervalRef.current) {
         clearInterval(intervalRef.current)
         intervalRef.current = null
       }
-      setFoundText('')
+      setTarget(null)
+      setCurrentInstruction('')
       setIsProcessing(false)
+      historyRef.current = []
+      prevInstructionRef.current = ''
+      prevFrameRef.current = ''
       return
     }
 
-    // Create a hidden video element for frame extraction
     const video = document.createElement('video')
     video.style.cssText = 'position:fixed;opacity:0;pointer-events:none;width:1px;height:1px;'
     video.muted = true
     video.playsInline = true
     video.srcObject = stream
     document.body.appendChild(video)
+    videoRef.current = video
     video.play().catch(console.error)
 
-    // Once we know the stream's real dimensions, size the analysis canvas to match.
-    // More native pixels → better OCR accuracy (especially on Retina screens).
     video.addEventListener('loadedmetadata', () => {
       const canvas = analysisCanvasRef.current
       if (canvas && video.videoWidth > 0) {
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
+        const scale = Math.min(1, CAPTURE_MAX_W / video.videoWidth, CAPTURE_MAX_H / video.videoHeight)
+        canvas.width = Math.round(video.videoWidth * scale)
+        canvas.height = Math.round(video.videoHeight * scale)
       }
     }, { once: true })
 
-    intervalRef.current = setInterval(async () => {
-      const canvas = analysisCanvasRef.current
-      const worker = workerRef.current
-      if (!canvas || !worker) return
+    const diffCanvas = document.createElement('canvas')
+    diffCanvas.width = DIFF_WIDTH
+    diffCanvas.height = DIFF_HEIGHT
+    const diffCtx = diffCanvas.getContext('2d')
+
+    let prevPixels: Uint8ClampedArray | null = null
+    let lastCallTime = 0
+    let isRunning = false
+
+    intervalRef.current = setInterval(() => {
+      if (!diffCtx) return
       if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return
 
-      const ctx = canvas.getContext('2d')
-      if (!ctx) return
+      diffCtx.drawImage(video, 0, 0, DIFF_WIDTH, DIFF_HEIGHT)
+      const cur = diffCtx.getImageData(0, 0, DIFF_WIDTH, DIFF_HEIGHT).data
 
-      try {
-        setIsProcessing(true)
-        // Grayscale + contrast boost: Tesseract reads high-contrast B&W far better
-        // than raw colorful screen content
-        ctx.filter = 'grayscale(1) contrast(1.5)'
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-        ctx.filter = 'none'
-        const result = await worker.recognize(canvas)
-        setFoundText(result.data.text.toLowerCase().trim())
-      } catch {
-        // Ignore transient OCR errors
-      } finally {
-        setIsProcessing(false)
+      const now = Date.now()
+      const heartbeat = now - lastCallTime > HEARTBEAT_MS
+
+      let changed = heartbeat
+      if (!changed && prevPixels) {
+        let diffCount = 0
+        for (let i = 0; i < cur.length; i += 4) {
+          if (
+            Math.abs(cur[i]     - prevPixels[i])     > PIXEL_DELTA ||
+            Math.abs(cur[i + 1] - prevPixels[i + 1]) > PIXEL_DELTA ||
+            Math.abs(cur[i + 2] - prevPixels[i + 2]) > PIXEL_DELTA
+          ) diffCount++
+        }
+        changed = diffCount / (DIFF_WIDTH * DIFF_HEIGHT) > CHANGE_THRESHOLD
       }
-    }, 1000)
+
+      prevPixels = new Uint8ClampedArray(cur)
+
+      if (!changed || isRunning) return
+
+      const currentGoal = goalRef.current
+      if (!currentGoal) return
+
+      const canvas = analysisCanvasRef.current
+      if (!canvas) return
+
+      isRunning = true
+      lastCallTime = now
+      setIsProcessing(true)
+
+      const ctx = canvas.getContext('2d')
+      if (!ctx) { isRunning = false; setIsProcessing(false); return }
+
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1]
+
+      fetch('/api/vision', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageBase64: base64, prevFrame: prevFrameRef.current, mimeType: 'image/jpeg', goal: currentGoal, history: historyRef.current, currentInstruction: prevInstructionRef.current }),
+      })
+        .then(r => r.json())
+        .then((result: { instruction?: string; bbox?: number[] }) => {
+          const newInstruction = result.instruction ?? ''
+          // When the instruction changes, the previous one was completed — record it
+          if (prevInstructionRef.current && prevInstructionRef.current !== newInstruction) {
+            historyRef.current = [...historyRef.current, prevInstructionRef.current].slice(-20)
+          }
+          prevInstructionRef.current = newInstruction
+          prevFrameRef.current = base64
+          setCurrentInstruction(newInstruction)
+          if (Array.isArray(result.bbox) && result.bbox.length === 4) {
+            const [ymin, xmin, ymax, xmax] = result.bbox
+            setTarget({
+              x: xmin / 1000,
+              y: ymin / 1000,
+              width: (xmax - xmin) / 1000,
+              height: (ymax - ymin) / 1000,
+            })
+          } else {
+            setTarget(null)
+          }
+        })
+        .catch(() => { setTarget(null) })
+        .finally(() => {
+          isRunning = false
+          lastCallTime = Date.now()
+          setIsProcessing(false)
+        })
+    }, DIFF_INTERVAL)
 
     return () => {
       if (intervalRef.current) {
@@ -105,8 +170,9 @@ export function useVision(stream: MediaStream | null): UseVisionReturn {
         intervalRef.current = null
       }
       document.body.removeChild(video)
+      videoRef.current = null
     }
-  }, [stream])
+  }, [stream, setTarget])
 
-  return { analysisCanvasRef, foundText, isProcessing }
+  return { analysisCanvasRef, videoRef, isProcessing, currentInstruction }
 }

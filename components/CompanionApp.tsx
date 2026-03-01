@@ -1,71 +1,82 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useScreenShare } from '@/hooks/useScreenShare'
 import { usePiP } from '@/hooks/usePiP'
 import { useVision } from '@/hooks/useVision'
-import { useGuide } from '@/hooks/useGuide'
-import { useCoordinateStore, getCropBox } from '@/store/coordinateStore'
-import { useFinder } from '@/hooks/useFinder'
-import { useWorkflowStore } from '@/store/workflowStore'
-import WorkflowEditor from '@/components/WorkflowEditor'
+import { useCoordinateStore } from '@/store/coordinateStore'
 import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
   drawHello,
   drawScanning,
   drawConnectionLost,
-  drawZoomedView,
+  drawOverviewWithBox,
 } from '@/lib/drawCanvas'
-
-const ANALYSIS_WIDTH = 1280
-const ANALYSIS_HEIGHT = 720
 
 export default function CompanionApp() {
   const { stream, status, error, startSharing, stopSharing } = useScreenShare()
   const { outputCanvasRef, pipStatus, pipError, togglePiP } = usePiP()
-  const { analysisCanvasRef, videoRef, foundText, foundWords, isProcessing } = useVision(stream)
-  const { currentInstruction, currentStep } = useGuide(foundText)
-  const stepsLength = useWorkflowStore(s => s.steps.length)
-  useFinder(foundWords, 'search')
+  const [goal, setGoal] = useState('')
+  const { analysisCanvasRef, videoRef, isProcessing, currentInstruction } = useVision(stream, goal)
   const { target } = useCoordinateStore()
 
   // Ref keeps the label fresh inside the rAF closure without restarting the loop
   const instructionRef = useRef(currentInstruction)
   useEffect(() => { instructionRef.current = currentInstruction }, [currentInstruction])
 
+  // Resize output canvas to match the video stream's actual dimensions
+  useEffect(() => {
+    if (status !== 'active') return
+    const video = videoRef.current
+    const canvas = outputCanvasRef.current
+    if (!video || !canvas) return
+
+    function applySize() {
+      if (video!.videoWidth > 0) {
+        canvas!.width = video!.videoWidth
+        canvas!.height = video!.videoHeight
+      }
+    }
+
+    if (video.videoWidth > 0) {
+      applySize()
+    } else {
+      video.addEventListener('loadedmetadata', applySize, { once: true })
+      return () => video.removeEventListener('loadedmetadata', applySize)
+    }
+  }, [status, videoRef, outputCanvasRef])
+
   // Canvas loop — active whenever the stream is live
   useEffect(() => {
     if (status !== 'active') return
 
     const canvas = outputCanvasRef.current
-    const video = videoRef.current
     if (!canvas) return
 
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    // No target yet — show a static "Searching..." frame and wait
-    if (!target || !video) {
+    if (!target) {
       drawScanning(ctx)
       return
     }
 
-    const cropBox = getCropBox(target)
     let rafId: number
 
     function draw() {
-      if (video!.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
-        drawZoomedView(ctx!, video!, target!, cropBox, instructionRef.current)
+      const vid = videoRef.current
+      if (vid && vid.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        drawOverviewWithBox(ctx!, vid, target!, instructionRef.current)
       }
       rafId = requestAnimationFrame(draw)
     }
 
     rafId = requestAnimationFrame(draw)
     return () => cancelAnimationFrame(rafId)
-  }, [status, target, outputCanvasRef, videoRef])  // target in deps: restarts rAF whenever coordinates change
+  }, [status, target, outputCanvasRef, videoRef])
 
-  // Static canvas rendering — only for non-active states (active is handled by rAF loop)
+  // Static canvas rendering — only for non-active states
   useEffect(() => {
     if (status === 'active') return
 
@@ -98,6 +109,16 @@ export default function CompanionApp() {
     <main className="min-h-screen bg-gray-950 text-white flex flex-col items-center justify-center gap-6 p-8">
       <h1 className="text-3xl font-bold tracking-tight">Companion Protocol</h1>
 
+      {/* Goal input */}
+      <div className="w-full max-w-lg">
+        <input
+          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-sm"
+          placeholder='What do you want to do? e.g. "Search for a paper on AI"'
+          value={goal}
+          onChange={e => setGoal(e.target.value)}
+        />
+      </div>
+
       {/* Controls */}
       <div className="flex gap-4 flex-wrap justify-center">
         {status === 'active' ? (
@@ -123,7 +144,6 @@ export default function CompanionApp() {
         >
           {pipStatus === 'active' ? 'Close Companion' : 'Toggle Companion Mode'}
         </button>
-
       </div>
 
       {error && (
@@ -133,7 +153,7 @@ export default function CompanionApp() {
         <p className="text-orange-400 text-sm">PiP error: {pipError}</p>
       )}
 
-      {/* PiP preview canvas (visible on page as debug preview) */}
+      {/* PiP preview canvas */}
       <div className="border border-gray-700 rounded-lg overflow-hidden">
         <canvas
           ref={outputCanvasRef}
@@ -161,24 +181,20 @@ export default function CompanionApp() {
           <span className="text-gray-300">{pipStatus}</span>
         </p>
         <p>
-          <span className="text-gray-500">👀 Seeing:</span>{' '}
-          <span className="text-yellow-300 break-all">
-            {foundText ? `"${foundText.slice(0, 120)}${foundText.length > 120 ? '…' : ''}"` : '—'}
-          </span>
+          <span className="text-gray-500">Processing:</span>{' '}
+          <span className="text-gray-300">{isProcessing ? 'yes' : 'no'}</span>
         </p>
         <p>
-          <span className="text-gray-500">Step {currentStep + 1} of {stepsLength}:</span>{' '}
-          <span className="text-white">{currentInstruction}</span>
+          <span className="text-gray-500">Next action:</span>{' '}
+          <span className="text-yellow-300">{currentInstruction || '—'}</span>
         </p>
       </div>
 
-      <WorkflowEditor />
-
-      {/* Hidden analysis canvas — sized for OCR resolution */}
+      {/* Hidden analysis canvas */}
       <canvas
         ref={analysisCanvasRef}
-        width={ANALYSIS_WIDTH}
-        height={ANALYSIS_HEIGHT}
+        width={1280}
+        height={720}
         className="hidden"
       />
     </main>

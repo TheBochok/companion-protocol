@@ -31,7 +31,7 @@ export function useScreenShare(): UseScreenShareReturn {
     try {
       setError(null)
       const mediaStream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
+        video: { width: { ideal: 3840 }, height: { ideal: 2160 }, frameRate: { ideal: 30 } },
         audio: false,
       })
 

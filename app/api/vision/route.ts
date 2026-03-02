@@ -31,7 +31,12 @@ Return JSON with:
 - "instruction": a specific, self-contained action the user can immediately follow (e.g. "Click the Search button", "Type 'AI alignment papers' in the search box", "Press Enter"). Always include the exact text to type when the action involves typing.
 - "bbox": [ymin, xmin, ymax, xmax] with coordinates normalized 0–1000
 
-Only set instruction to "Goal complete" (and omit "bbox") when the goal's final result is clearly visible on screen and confirmed — for example, the target page has loaded, the file has been saved, or the expected output is shown. Never declare completion just because an action was submitted; wait for the result.`
+Be very strict about what "Goal complete" means — interpret the goal literally:
+- If the goal says "download", the file must actually be downloading or saved (e.g. a download bar, save dialog, or confirmation is visible). Opening a PDF viewer or preview page is NOT a download.
+- If the goal says "find" or "search", the relevant result must be visible on screen.
+- If the goal says "open", the target must be open and loaded.
+- If the goal says "send" or "submit", the confirmation of delivery must be visible.
+- When in doubt, keep guiding. Only set instruction to "Goal complete" (and omit "bbox") when the literal outcome described in the goal is unambiguously achieved on screen. Never declare completion at an intermediate step.`
 
   try {
     const t0 = Date.now()

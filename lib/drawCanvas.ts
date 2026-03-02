@@ -199,13 +199,8 @@ export function drawOverviewWithBox(
   ctx.lineTo(cx + r + gap + lineLen, cy)
   ctx.stroke()
 
-  // Label bar — proportionally sized so text is readable in the PiP window
+  // Label bar — height grows to fit however many lines the text wraps to
   const fontSize = Math.round(height * 0.045)
-  const barHeight = fontSize * 2
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.72)'
-  ctx.fillRect(0, height - barHeight, width, barHeight)
-
-  ctx.fillStyle = '#ffffff'
   ctx.font = `bold ${fontSize}px sans-serif`
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
@@ -213,7 +208,14 @@ export function drawOverviewWithBox(
   const lines = wrapText(ctx, label, width * 0.9)
   const lineHeight = fontSize * 1.25
   const totalTextHeight = lines.length * lineHeight
-  const startY = height - barHeight + (barHeight - totalTextHeight) / 2 + lineHeight / 2
+  const barPadding = fontSize * 0.75
+  const barHeight = totalTextHeight + barPadding * 2
+
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.72)'
+  ctx.fillRect(0, height - barHeight, width, barHeight)
+
+  ctx.fillStyle = '#ffffff'
+  const startY = height - barHeight + barPadding + lineHeight / 2
   lines.forEach((line, i) => ctx.fillText(line, width / 2, startY + i * lineHeight))
 }
 

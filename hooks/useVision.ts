@@ -8,6 +8,7 @@ const DIFF_HEIGHT = 36
 const DIFF_INTERVAL = 150
 const PIXEL_DELTA = 25
 const CHANGE_THRESHOLD = 0.015
+const BIG_CHANGE_THRESHOLD = 0.08
 const HEARTBEAT_MS = 4000
 
 const CAPTURE_MAX_W = 1920
@@ -85,6 +86,7 @@ export function useVision(stream: MediaStream | null, goal: string): UseVisionRe
     let prevPixels: Uint8ClampedArray | null = null
     let lastCallTime = 0
     let isRunning = false
+    let abortController: AbortController | null = null
 
     intervalRef.current = setInterval(() => {
       if (!diffCtx) return
@@ -97,7 +99,8 @@ export function useVision(stream: MediaStream | null, goal: string): UseVisionRe
       const heartbeat = now - lastCallTime > HEARTBEAT_MS
 
       let changed = heartbeat
-      if (!changed && prevPixels) {
+      let bigChange = false
+      if (prevPixels) {
         let diffCount = 0
         for (let i = 0; i < cur.length; i += 4) {
           if (
@@ -106,12 +109,22 @@ export function useVision(stream: MediaStream | null, goal: string): UseVisionRe
             Math.abs(cur[i + 2] - prevPixels[i + 2]) > PIXEL_DELTA
           ) diffCount++
         }
-        changed = diffCount / (DIFF_WIDTH * DIFF_HEIGHT) > CHANGE_THRESHOLD
+        const ratio = diffCount / (DIFF_WIDTH * DIFF_HEIGHT)
+        bigChange = ratio > BIG_CHANGE_THRESHOLD
+        if (!changed) changed = ratio > CHANGE_THRESHOLD
       }
 
       prevPixels = new Uint8ClampedArray(cur)
 
-      if (!changed || isRunning) return
+      if (!changed) return
+
+      // If a big change happened while a request is in flight, abort and restart
+      if (isRunning && bigChange && abortController) {
+        abortController.abort()
+        isRunning = false
+      }
+
+      if (isRunning) return
 
       const currentGoal = goalRef.current
       if (!currentGoal) return
@@ -129,10 +142,13 @@ export function useVision(stream: MediaStream | null, goal: string): UseVisionRe
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
       const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1]
 
+      abortController = new AbortController()
+
       fetch('/api/vision', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ imageBase64: base64, prevFrame: prevFrameRef.current, mimeType: 'image/jpeg', goal: currentGoal, history: historyRef.current, currentInstruction: prevInstructionRef.current }),
+        signal: abortController.signal,
       })
         .then(r => r.json())
         .then((result: { instruction?: string; bbox?: number[] }) => {
@@ -156,7 +172,7 @@ export function useVision(stream: MediaStream | null, goal: string): UseVisionRe
             setTarget(null)
           }
         })
-        .catch(() => { setTarget(null) })
+        .catch((err) => { if (err?.name !== 'AbortError') setTarget(null) })
         .finally(() => {
           isRunning = false
           lastCallTime = Date.now()
@@ -169,6 +185,7 @@ export function useVision(stream: MediaStream | null, goal: string): UseVisionRe
         clearInterval(intervalRef.current)
         intervalRef.current = null
       }
+      abortController?.abort()
       document.body.removeChild(video)
       videoRef.current = null
     }

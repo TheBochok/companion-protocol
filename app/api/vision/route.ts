@@ -36,7 +36,9 @@ Be very strict about what "Goal complete" means — interpret the goal literally
 - If the goal says "find" or "search", the relevant result must be visible on screen.
 - If the goal says "open", the target must be open and loaded.
 - If the goal says "send" or "submit", the confirmation of delivery must be visible.
-- When in doubt, keep guiding. Only set instruction to "Goal complete" (and omit "bbox") when the literal outcome described in the goal is unambiguously achieved on screen. Never declare completion at an intermediate step.`
+- When in doubt, keep guiding. Only set instruction to "Goal complete" (and omit "bbox") when the literal outcome described in the goal is unambiguously achieved on screen. Never declare completion at an intermediate step.
+
+FINAL CHECK before returning "Goal complete": Can you point to a specific UI element or message visible RIGHT NOW on screen that proves the goal is done — not just that the user is on the right track or close to done? If you cannot identify concrete, visible evidence, return the next guiding step instead.`
 
   try {
     const t0 = Date.now()

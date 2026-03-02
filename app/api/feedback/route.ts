@@ -15,19 +15,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Message is required' }, { status: 400 })
   }
 
-  // Attach user_id if logged in, but feedback is allowed without auth too
+  // Attach user_id + email from auth if logged in
   let userId: string | null = null
+  let authEmail: string | null = null
   try {
     const auth = createServerClient()
     const { data: { user } } = await auth.auth.getUser()
-    if (user) userId = user.id
+    if (user) { userId = user.id; authEmail = user.email ?? null }
   } catch {}
 
   const { error } = await getDb()
     .from('general_feedback')
     .insert({
       user_id: userId ?? undefined,
-      email: email?.trim() || null,
+      email: authEmail,
       message: message.trim(),
     })
 

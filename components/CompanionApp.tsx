@@ -18,7 +18,6 @@ type ChatMsg = { role: 'ai' | 'user'; content: string }
 
 function FeedbackModal({ onClose }: { onClose: () => void }) {
   const [message, setMessage] = useState('')
-  const [email, setEmail] = useState('')
   const [state, setState] = useState<'idle' | 'sending' | 'done'>('idle')
 
   async function handleSubmit() {
@@ -28,7 +27,7 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
       await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, email }),
+        body: JSON.stringify({ message }),
       })
       setState('done')
       setTimeout(onClose, 2000)
@@ -72,14 +71,6 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
               value={message}
               onChange={e => setMessage(e.target.value)}
               className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/40 focus:shadow-[0_0_0_1px_rgba(99,102,241,0.18)] resize-none transition-all mb-3"
-            />
-
-            <input
-              type="email"
-              placeholder="Your email (optional, for follow-up)"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/40 focus:shadow-[0_0_0_1px_rgba(99,102,241,0.18)] transition-all mb-4"
             />
 
             <button

@@ -14,6 +14,9 @@ const HEARTBEAT_MS = 4000
 const CAPTURE_MAX_W = 1920
 const CAPTURE_MAX_H = 1080
 
+const THUMB_W = 320
+const THUMB_H = 180
+
 interface UseVisionReturn {
   analysisCanvasRef: React.RefObject<HTMLCanvasElement>
   videoRef: React.RefObject<HTMLVideoElement | null>
@@ -21,7 +24,7 @@ interface UseVisionReturn {
   currentInstruction: string
 }
 
-export function useVision(stream: MediaStream | null, goal: string): UseVisionReturn {
+export function useVision(stream: MediaStream | null, goal: string, sessionId: string | null): UseVisionReturn {
   const analysisCanvasRef = useRef<HTMLCanvasElement>(null)
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -36,14 +39,26 @@ export function useVision(stream: MediaStream | null, goal: string): UseVisionRe
     if (goalRef.current !== goal) {
       historyRef.current = []
       prevInstructionRef.current = ''
+      consecutiveCompleteRef.current = 0
+      lastEventIdRef.current = null
     }
     goalRef.current = goal
   }, [goal])
+
+  // Keep sessionId fresh
+  const sessionIdRef = useRef<string | null>(sessionId)
+  useEffect(() => { sessionIdRef.current = sessionId }, [sessionId])
 
   // Accumulate completed steps: when instruction changes, the previous one was acted on
   const historyRef = useRef<string[]>([])
   const prevInstructionRef = useRef('')
   const prevFrameRef = useRef('')
+  // Require N consecutive "Goal complete" responses before propagating to avoid false positives
+  const consecutiveCompleteRef = useRef(0)
+  const COMPLETIONS_REQUIRED = 2
+
+  // Analytics: track the last logged event id so we can update its acted status later
+  const lastEventIdRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!stream) {
@@ -57,6 +72,7 @@ export function useVision(stream: MediaStream | null, goal: string): UseVisionRe
       historyRef.current = []
       prevInstructionRef.current = ''
       prevFrameRef.current = ''
+      consecutiveCompleteRef.current = 0
       return
     }
 
@@ -82,6 +98,12 @@ export function useVision(stream: MediaStream | null, goal: string): UseVisionRe
     diffCanvas.width = DIFF_WIDTH
     diffCanvas.height = DIFF_HEIGHT
     const diffCtx = diffCanvas.getContext('2d')
+
+    // Thumbnail canvas for analytics keyframes
+    const thumbCanvas = document.createElement('canvas')
+    thumbCanvas.width = THUMB_W
+    thumbCanvas.height = THUMB_H
+    const thumbCtx = thumbCanvas.getContext('2d')
 
     let prevPixels: Uint8ClampedArray | null = null
     let lastCallTime = 0
@@ -142,6 +164,13 @@ export function useVision(stream: MediaStream | null, goal: string): UseVisionRe
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
       const base64 = canvas.toDataURL('image/jpeg', 0.85).split(',')[1]
 
+      // Capture small keyframe for analytics (captured now, used in .then())
+      let capturedKeyframe: string | null = null
+      if (thumbCtx) {
+        thumbCtx.drawImage(video, 0, 0, THUMB_W, THUMB_H)
+        capturedKeyframe = thumbCanvas.toDataURL('image/jpeg', 0.6).split(',')[1]
+      }
+
       abortController = new AbortController()
 
       fetch('/api/vision', {
@@ -153,12 +182,55 @@ export function useVision(stream: MediaStream | null, goal: string): UseVisionRe
         .then(r => r.json())
         .then((result: { instruction?: string; bbox?: number[] }) => {
           const newInstruction = result.instruction ?? ''
+          const isComplete = newInstruction === 'Goal complete'
+          prevFrameRef.current = base64
+
+          if (isComplete) {
+            consecutiveCompleteRef.current += 1
+            // Wait for N consecutive confirmations before showing completion.
+            // A false positive on a transitional frame will reset when the next
+            // frame produces a different instruction.
+            if (consecutiveCompleteRef.current < COMPLETIONS_REQUIRED) return
+          } else {
+            consecutiveCompleteRef.current = 0
+          }
+
+          // Analytics: when instruction changes, mark previous as acted and log new
+          if (newInstruction !== prevInstructionRef.current) {
+            const prevEventId = lastEventIdRef.current
+            lastEventIdRef.current = null
+            // Previous instruction was completed (user made progress or goal done)
+            if (prevEventId) {
+              fetch('/api/analytics', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ eventId: prevEventId, acted: true }),
+              }).catch(() => {})
+            }
+            // Log new instruction (skip 'Goal complete' — it's not an actionable step)
+            if (!isComplete && sessionIdRef.current) {
+              fetch('/api/analytics', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  sessionId: sessionIdRef.current,
+                  goal: currentGoal,
+                  instruction: newInstruction,
+                  bbox: result.bbox ?? null,
+                  screenshot: capturedKeyframe,
+                }),
+              })
+                .then(r => r.json())
+                .then((d: { id?: string }) => { if (d.id) lastEventIdRef.current = d.id })
+                .catch(() => {})
+            }
+          }
+
           // When the instruction changes, the previous one was completed — record it
           if (prevInstructionRef.current && prevInstructionRef.current !== newInstruction) {
             historyRef.current = [...historyRef.current, prevInstructionRef.current].slice(-20)
           }
           prevInstructionRef.current = newInstruction
-          prevFrameRef.current = base64
           setCurrentInstruction(newInstruction)
           if (Array.isArray(result.bbox) && result.bbox.length === 4) {
             const [ymin, xmin, ymax, xmax] = result.bbox
@@ -188,6 +260,16 @@ export function useVision(stream: MediaStream | null, goal: string): UseVisionRe
       abortController?.abort()
       document.body.removeChild(video)
       videoRef.current = null
+      // Mark any pending analytics event as abandoned (session ended without completion)
+      const pendingId = lastEventIdRef.current
+      lastEventIdRef.current = null
+      if (pendingId) {
+        fetch('/api/analytics', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ eventId: pendingId, acted: false }),
+        }).catch(() => {})
+      }
     }
   }, [stream, setTarget])
 

@@ -27,6 +27,8 @@ ${historySection}${currentSection}Analyze the current screenshot and identify th
 
 Keep guiding the user through every micro-step — never assume they will figure something out on their own. For example, after submitting a search query, wait for results to appear and then point to the most relevant result to click.
 
+IMPORTANT: If the screenshot shows the Via guidance app itself (e.g. a screen with "What do you want to do?", "Via is active", "End Guide", or a goal input box), the user has not yet navigated to the right place. Do NOT instruct them to interact with the Via UI. Instead, tell them to open a new browser tab and navigate to the website or application needed for the goal (e.g. "Open a new tab and go to vercel.com").
+
 If the next step requires the user to switch to a different browser tab (e.g. to copy information from one site to another, or because a link opened in a new tab), say so explicitly: "Switch to the [tab name or description] tab". Only suggest a tab switch when it is genuinely necessary — not as a default behaviour.
 
 Return JSON with:

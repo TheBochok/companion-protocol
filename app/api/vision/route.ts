@@ -29,7 +29,7 @@ export async function POST(req: NextRequest) {
 
 ${historySection}${currentSection}${userContextSection}Analyze the current screenshot and identify the single best UI element the user should interact with NEXT to make progress toward the goal. Do not repeat steps that are already completed. Give exactly one action — never combine multiple actions into one instruction.
 
-Keep guiding the user through every micro-step — never assume they will figure something out on their own. For example, after submitting a search query, wait for results to appear and then point to the most relevant result to click.
+Keep guiding the user through every micro-step — never assume they will figure something out on their own. The clipboard can only hold one value at a time — always guide the user to copy one value and immediately paste it before moving on to the next copy. For example, after submitting a search query, wait for results to appear and then point to the most relevant result to click.
 
 IMPORTANT: If the screenshot shows the Via guidance app itself (e.g. a screen with "What do you want to do?", "Via is active", "End Guide", or a goal input box), the user has not yet navigated to the right place. Do NOT instruct them to interact with the Via UI. Instead, tell them to open a new browser tab and navigate to the website or application needed for the goal (e.g. "Open a new tab and go to vercel.com").
 

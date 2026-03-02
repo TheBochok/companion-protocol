@@ -14,8 +14,8 @@ const geistMono = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Companion Protocol",
-  description: "Browser-native workflow guidance tool",
+  title: "Via",
+  description: "GPS for Software",
 };
 
 export default function RootLayout({

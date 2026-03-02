@@ -1,5 +1,5 @@
 import CompanionApp from '@/components/CompanionApp'
 
-export default function Home() {
+export default function AppPage() {
   return <CompanionApp />
 }

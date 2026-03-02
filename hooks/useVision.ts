@@ -238,7 +238,8 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
           }
           prevInstructionRef.current = newInstruction
           setCurrentInstruction(newInstruction)
-          if (Array.isArray(result.bbox) && result.bbox.length === 4) {
+          const isTabSwitch = /switch.{0,20}tab|open.{0,20}(new tab|tab)/i.test(newInstruction)
+          if (!isTabSwitch && Array.isArray(result.bbox) && result.bbox.length === 4) {
             const [ymin, xmin, ymax, xmax] = result.bbox
             setTarget({
               x: xmin / 1000,

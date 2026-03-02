@@ -33,7 +33,7 @@ Keep guiding the user through every micro-step — never assume they will figure
 
 IMPORTANT: If the screenshot shows the Via guidance app itself (e.g. a screen with "What do you want to do?", "Via is active", "End Guide", or a goal input box), the user has not yet navigated to the right place. Do NOT instruct them to interact with the Via UI. Instead, tell them to open a new browser tab and navigate to the website or application needed for the goal (e.g. "Open a new tab and go to vercel.com").
 
-If the next step requires the user to switch to a different browser tab (e.g. to copy information from one site to another, or because a link opened in a new tab), say so explicitly: "Switch to the [tab name or description] tab". Only suggest a tab switch when it is genuinely necessary — not as a default behaviour.
+If the next step requires the user to switch to a different browser tab (e.g. to copy information from one site to another, or because a link opened in a new tab), say so explicitly: "Switch to the [tab name or description] tab". Only suggest a tab switch when it is genuinely necessary — not as a default behaviour. When giving a tab-switch instruction, always omit the bbox.
 
 Return JSON with:
 - "instruction": a specific, self-contained action the user can immediately follow (e.g. "Click the Search button", "Type 'AI alignment papers' in the search box", "Press Enter"). Always include the exact text to type when the action involves typing.

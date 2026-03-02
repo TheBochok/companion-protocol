@@ -105,8 +105,10 @@ export default function CompanionApp() {
   const [isStarting, setIsStarting] = useState(false)
   const [triggerFeedback, setTriggerFeedback] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
+  const [contextInput, setContextInput] = useState('')
+  const [contextSent, setContextSent] = useState(false)
 
-  const { analysisCanvasRef, videoRef, isProcessing, currentInstruction } = useVision(stream, goal, sessionId)
+  const { analysisCanvasRef, videoRef, isProcessing, currentInstruction, injectContext } = useVision(stream, goal, sessionId)
   const { target } = useCoordinateStore()
 
   // Ref so the canvas RAF loop always reads the latest instruction without restarting
@@ -353,6 +355,39 @@ export default function CompanionApp() {
                   <p className="text-white text-sm leading-relaxed">{currentInstruction}</p>
                 </div>
               )}
+
+              {/* Context input */}
+              <div className="relative bg-white/[0.03] border border-white/[0.06] rounded-xl focus-within:border-indigo-500/30 transition-all duration-200 mb-4">
+                <input
+                  className="w-full h-11 bg-transparent pl-4 pr-16 text-white text-sm placeholder:text-slate-600 focus:outline-none rounded-xl"
+                  placeholder="Something blocking you? Tell Via…"
+                  value={contextInput}
+                  onChange={e => { setContextInput(e.target.value); setContextSent(false) }}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && contextInput.trim()) {
+                      injectContext(contextInput.trim())
+                      setContextInput('')
+                      setContextSent(true)
+                    }
+                  }}
+                />
+                {contextSent ? (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-emerald-400 font-medium">Sent ✓</span>
+                ) : (
+                  <button
+                    onClick={() => {
+                      if (!contextInput.trim()) return
+                      injectContext(contextInput.trim())
+                      setContextInput('')
+                      setContextSent(true)
+                    }}
+                    disabled={!contextInput.trim()}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-indigo-400 hover:text-indigo-300 disabled:text-slate-700 font-medium transition-colors"
+                  >
+                    Send
+                  </button>
+                )}
+              </div>
 
               {pipStatus !== 'active' && (
                 <button

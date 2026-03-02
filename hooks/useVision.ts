@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 import { useCoordinateStore } from '@/store/coordinateStore'
 
 const DIFF_WIDTH = 64
@@ -22,6 +22,7 @@ interface UseVisionReturn {
   videoRef: React.RefObject<HTMLVideoElement | null>
   isProcessing: boolean
   currentInstruction: string
+  injectContext: (text: string) => void
 }
 
 export function useVision(stream: MediaStream | null, goal: string, sessionId: string | null): UseVisionReturn {
@@ -59,6 +60,10 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
 
   // Analytics: track the last logged event id so we can update its acted status later
   const lastEventIdRef = useRef<string | null>(null)
+
+  // One-shot user context — included in the next vision call then cleared
+  const pendingContextRef = useRef('')
+  const injectContext = useCallback((text: string) => { pendingContextRef.current = text }, [])
 
   useEffect(() => {
     if (!stream) {
@@ -172,11 +177,12 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
       }
 
       abortController = new AbortController()
+      pendingContextRef.current = ''  // consume immediately so it's not sent twice
 
       fetch('/api/vision', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64, prevFrame: prevFrameRef.current, mimeType: 'image/jpeg', goal: currentGoal, history: historyRef.current, currentInstruction: prevInstructionRef.current }),
+        body: JSON.stringify({ imageBase64: base64, prevFrame: prevFrameRef.current, mimeType: 'image/jpeg', goal: currentGoal, history: historyRef.current, currentInstruction: prevInstructionRef.current, userContext: pendingContextRef.current || undefined }),
         signal: abortController.signal,
       })
         .then(r => r.json())
@@ -273,5 +279,5 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
     }
   }, [stream, setTarget])
 
-  return { analysisCanvasRef, videoRef, isProcessing, currentInstruction }
+  return { analysisCanvasRef, videoRef, isProcessing, currentInstruction, injectContext }
 }

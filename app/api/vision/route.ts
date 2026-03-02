@@ -2,7 +2,7 @@ import { GoogleGenAI, Type } from '@google/genai'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
-  const { imageBase64, prevFrame, mimeType, goal, history = [], currentInstruction = '' } = await req.json()
+  const { imageBase64, prevFrame, mimeType, goal, history = [], currentInstruction = '', userContext = '' } = await req.json()
   const imageSizeKB = Math.round(imageBase64.length * 0.75 / 1024)
   console.log(`[vision] → request  mime=${mimeType} size=${imageSizeKB}KB goal="${goal}" history=${history.length}`)
 
@@ -21,9 +21,13 @@ export async function POST(req: NextRequest) {
     ? `Your current instruction to the user is: "${currentInstruction}"\n${prevFrame ? 'Compare the previous and current screenshots to detect whether the user has acted on this. ' : ''}Only change this if the user has clearly made progress (navigated to a new screen, completed the action). Otherwise return the exact same instruction and bbox.\n\n`
     : ''
 
+  const userContextSection = userContext
+    ? `The user has added context about the current situation: "${userContext}"\nTake this into account when deciding the next instruction — for example, if they say an element is disabled or not clickable, suggest an alternative path.\n\n`
+    : ''
+
   const prompt = `You are helping a user accomplish this goal: "${goal}"
 
-${historySection}${currentSection}Analyze the current screenshot and identify the single best UI element the user should interact with NEXT to make progress toward the goal. Do not repeat steps that are already completed. Give exactly one action — never combine multiple actions into one instruction.
+${historySection}${currentSection}${userContextSection}Analyze the current screenshot and identify the single best UI element the user should interact with NEXT to make progress toward the goal. Do not repeat steps that are already completed. Give exactly one action — never combine multiple actions into one instruction.
 
 Keep guiding the user through every micro-step — never assume they will figure something out on their own. For example, after submitting a search query, wait for results to appear and then point to the most relevant result to click.
 

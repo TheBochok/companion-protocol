@@ -27,6 +27,8 @@ ${historySection}${currentSection}Analyze the current screenshot and identify th
 
 Keep guiding the user through every micro-step — never assume they will figure something out on their own. For example, after submitting a search query, wait for results to appear and then point to the most relevant result to click.
 
+If the next step requires the user to switch to a different browser tab (e.g. to copy information from one site to another, or because a link opened in a new tab), say so explicitly: "Switch to the [tab name or description] tab". Only suggest a tab switch when it is genuinely necessary — not as a default behaviour.
+
 Return JSON with:
 - "instruction": a specific, self-contained action the user can immediately follow (e.g. "Click the Search button", "Type 'AI alignment papers' in the search box", "Press Enter"). Always include the exact text to type when the action involves typing.
 - "bbox": [ymin, xmin, ymax, xmax] with coordinates normalized 0–1000

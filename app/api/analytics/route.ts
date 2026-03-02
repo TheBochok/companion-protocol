@@ -59,3 +59,28 @@ export async function PATCH(req: NextRequest) {
 
   return NextResponse.json({ ok: true })
 }
+
+export async function PUT(req: NextRequest) {
+  const auth = createServerClient()
+  const { data: { user } } = await auth.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const { sessionId, goal, rating, reason } = await req.json()
+
+  const { error } = await getDb()
+    .from('session_feedback')
+    .insert({
+      user_id: user.id,
+      session_id: sessionId,
+      goal,
+      rating,
+      reason: reason ?? null,
+    })
+
+  if (error) {
+    console.error('[analytics] feedback error:', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  return NextResponse.json({ ok: true })
+}

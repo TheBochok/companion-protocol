@@ -27,6 +27,7 @@ export default function CompanionApp() {
   const [isClarifying, setIsClarifying] = useState(false)
   const [isReady, setIsReady] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
+  const [triggerFeedback, setTriggerFeedback] = useState(false)
 
   const { analysisCanvasRef, videoRef, isProcessing, currentInstruction } = useVision(stream, goal, sessionId)
   const { target } = useCoordinateStore()
@@ -42,15 +43,21 @@ export default function CompanionApp() {
       setChatHistory([])
       setIsReady(false)
       setSessionId(null)
+      setTriggerFeedback(false)
     }
   }, [status])
+
+  // Show feedback panel when goal is complete
+  useEffect(() => {
+    if (currentInstruction === 'Goal complete') setTriggerFeedback(true)
+  }, [currentInstruction])
 
   // ── Document PiP: keep overlay in sync ────────────────────────────────────
   useEffect(() => {
     if (status !== 'active' || pipMode !== 'document') return
-    updatePiP({ stream, target, instruction: currentInstruction, onCancel: handleEndGuide })
+    updatePiP({ stream, target, instruction: currentInstruction, onCancel: handleEndGuide, triggerFeedback, onFeedback: handleFeedback })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, pipMode, pipStatus, stream, target, currentInstruction])
+  }, [status, pipMode, pipStatus, stream, target, currentInstruction, triggerFeedback])
 
   // ── Canvas PiP fallback: resize output canvas to match video stream ───────
   useEffect(() => {
@@ -190,7 +197,22 @@ export default function CompanionApp() {
     setChatHistory([])
     setIsReady(false)
     setSessionId(null)
+    setTriggerFeedback(false)
   }, [closePiP, stopSharing])
+
+  const handleEndGuideRef = useRef(handleEndGuide)
+  useEffect(() => { handleEndGuideRef.current = handleEndGuide }, [handleEndGuide])
+
+  const handleFeedback = useCallback((rating: 'up' | 'down', reason?: string) => {
+    if (sessionId && goal) {
+      fetch('/api/analytics', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, goal, rating, reason: reason ?? null }),
+      }).catch(() => {})
+    }
+    setTimeout(() => handleEndGuideRef.current(), 1800)
+  }, [sessionId, goal])
 
   function handleEditGoal() {
     setPhase('idle')

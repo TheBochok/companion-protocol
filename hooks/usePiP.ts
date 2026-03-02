@@ -14,6 +14,8 @@ export interface PiPRenderProps {
   target: { x: number; y: number; width: number; height: number } | null
   instruction: string
   onCancel: () => void
+  triggerFeedback: boolean
+  onFeedback: (rating: 'up' | 'down', reason?: string) => void
 }
 
 interface UsePiPReturn {

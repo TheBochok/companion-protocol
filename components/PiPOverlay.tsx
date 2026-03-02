@@ -44,7 +44,9 @@ function useVideoDisplayArea(videoEl: HTMLVideoElement | null) {
   return area
 }
 
-export default function PiPOverlay({ stream, target, instruction, onCancel }: PiPRenderProps) {
+type FbState = 'none' | 'rating' | 'reason' | 'thanks'
+
+export default function PiPOverlay({ stream, target, instruction, onCancel, triggerFeedback, onFeedback }: PiPRenderProps) {
   const videoRef          = useRef<HTMLVideoElement | null>(null)
   const videoContainerRef = useRef<HTMLDivElement | null>(null)
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null)
@@ -55,6 +57,23 @@ export default function PiPOverlay({ stream, target, instruction, onCancel }: Pi
   const targetRef = useRef(target)
   useEffect(() => { areaRef.current = area   }, [area])
   useEffect(() => { targetRef.current = target }, [target])
+
+  const [fbState, setFbState] = useState<FbState>('none')
+  useEffect(() => {
+    if (triggerFeedback && fbState === 'none') setFbState('rating')
+  }, [triggerFeedback, fbState])
+
+  function handleDone() { setFbState('rating') }
+
+  function handleRate(rating: 'up' | 'down') {
+    if (rating === 'up') { setFbState('thanks'); onFeedback('up') }
+    else setFbState('reason')
+  }
+
+  function handleReason(reason?: string) {
+    setFbState('thanks')
+    onFeedback('down', reason)
+  }
 
   // Callback ref: set both the local ref and the state (for useVideoDisplayArea)
   const setVideoRef = (el: HTMLVideoElement | null) => {
@@ -185,7 +204,7 @@ export default function PiPOverlay({ stream, target, instruction, onCancel }: Pi
       </div>
 
       {/* ── Scanning dots (outside the zoom container so they stay centered) ── */}
-      {!target && !!stream && (
+      {!target && !!stream && fbState === 'none' && (
         <div style={{
           position: 'absolute', top: '50%', left: '50%',
           transform: 'translate(-50%, -50%)',
@@ -206,8 +225,10 @@ export default function PiPOverlay({ stream, target, instruction, onCancel }: Pi
         </div>
       )}
 
-      {/* ── Floating glass pill (outside zoom container, always at bottom center) ── */}
-      {instruction && (
+      {/* ── Floating pill: instruction or feedback ── */}
+      {fbState !== 'none' ? (
+        <FeedbackPanel key={fbState} fbState={fbState as 'rating' | 'reason' | 'thanks'} onRate={handleRate} onReason={handleReason} />
+      ) : instruction ? (
         <div
           className="pip-slide-up"
           style={{
@@ -228,15 +249,15 @@ export default function PiPOverlay({ stream, target, instruction, onCancel }: Pi
           {/* Instruction */}
           <span style={{
             color: '#f1f5f9', fontSize: 13, fontWeight: 500,
-            overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 360,
+            overflow: 'hidden', textOverflow: 'ellipsis', flex: '1 1 auto', minWidth: 0,
           }}>
             {instruction}
           </span>
 
           {/* Done button */}
-          <DoneButton onClick={onCancel} />
+          <DoneButton onClick={handleDone} />
         </div>
-      )}
+      ) : null}
     </div>
   )
 }
@@ -264,6 +285,112 @@ function DoneButton({ onClick }: { onClick: () => void }) {
       <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
         <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
       </svg>
+    </button>
+  )
+}
+
+function FeedbackPanel({
+  fbState, onRate, onReason,
+}: {
+  fbState: 'rating' | 'reason' | 'thanks'
+  onRate: (r: 'up' | 'down') => void
+  onReason: (reason?: string) => void
+}) {
+  const pillBase = {
+    position: 'absolute' as const,
+    bottom: 28,
+    left: '50%',
+    background: 'rgba(2, 6, 23, 0.88)',
+    backdropFilter: 'blur(24px)',
+    WebkitBackdropFilter: 'blur(24px)',
+    border: '1px solid rgba(255,255,255,0.09)',
+    boxShadow: '0 8px 32px rgba(99,102,241,0.18), 0 2px 10px rgba(0,0,0,0.5)',
+    fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+    maxWidth: '88%',
+  }
+
+  if (fbState === 'rating') return (
+    <div
+      className="pip-slide-up"
+      style={{ ...pillBase, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 9999 }}
+    >
+      <span style={{ color: '#94a3b8', fontSize: 13, fontWeight: 500, whiteSpace: 'nowrap' as const }}>
+        How did it go?
+      </span>
+      <ThumbButton emoji="👍" onClick={() => onRate('up')} />
+      <ThumbButton emoji="👎" onClick={() => onRate('down')} />
+    </div>
+  )
+
+  if (fbState === 'reason') return (
+    <div
+      className="pip-slide-up"
+      style={{ ...pillBase, display: 'flex', flexDirection: 'column' as const, gap: 8, padding: '12px 16px', borderRadius: 18 }}
+    >
+      <span style={{ color: '#94a3b8', fontSize: 12, fontWeight: 500 }}>What went wrong?</span>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' as const }}>
+        <ReasonChip label="Step skipped" value="step_skipped" onReason={onReason} />
+        <ReasonChip label="Wrong button" value="wrong_button" onReason={onReason} />
+        <ReasonChip label="Confusing"    value="confusing"    onReason={onReason} />
+        <ReasonChip label="Skip →"       value={undefined}    onReason={onReason} muted />
+      </div>
+    </div>
+  )
+
+  return (
+    <div
+      className="pip-slide-up"
+      style={{ ...pillBase, display: 'flex', alignItems: 'center', gap: 8, padding: '10px 20px', borderRadius: 9999 }}
+    >
+      <span style={{ color: '#4ade80', fontSize: 13, fontWeight: 500 }}>✓ Thanks for the feedback!</span>
+    </div>
+  )
+}
+
+function ThumbButton({ emoji, onClick }: { emoji: string; onClick: () => void }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: hovered ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.05)',
+        border: `1px solid ${hovered ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.08)'}`,
+        borderRadius: 9999, cursor: 'pointer',
+        padding: '5px 10px', fontSize: 18, lineHeight: '1',
+        transition: 'all 0.15s',
+        fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+      }}
+    >
+      {emoji}
+    </button>
+  )
+}
+
+function ReasonChip({ label, value, onReason, muted = false }: {
+  label: string
+  value: string | undefined
+  onReason: (r?: string) => void
+  muted?: boolean
+}) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <button
+      onClick={() => onReason(value)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        background: muted ? 'transparent' : hovered ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.05)',
+        color: muted ? '#475569' : hovered ? '#a5b4fc' : '#94a3b8',
+        border: `1px solid ${muted ? 'rgba(255,255,255,0.06)' : hovered ? 'rgba(99,102,241,0.3)' : 'rgba(255,255,255,0.08)'}`,
+        borderRadius: 9999, cursor: 'pointer',
+        padding: '4px 12px', fontSize: 12, fontWeight: 500,
+        transition: 'all 0.15s',
+        fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+      }}
+    >
+      {label}
     </button>
   )
 }

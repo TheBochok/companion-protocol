@@ -228,7 +228,7 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
 
           // When the instruction changes, the previous one was completed — record it
           if (prevInstructionRef.current && prevInstructionRef.current !== newInstruction) {
-            historyRef.current = [...historyRef.current, prevInstructionRef.current].slice(-20)
+            historyRef.current = [...historyRef.current, prevInstructionRef.current].slice(-100)
           }
           prevInstructionRef.current = newInstruction
           setCurrentInstruction(newInstruction)

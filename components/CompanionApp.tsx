@@ -16,6 +16,91 @@ import {
 type Phase = 'idle' | 'clarifying' | 'active'
 type ChatMsg = { role: 'ai' | 'user'; content: string }
 
+function FeedbackModal({ onClose }: { onClose: () => void }) {
+  const [message, setMessage] = useState('')
+  const [email, setEmail] = useState('')
+  const [state, setState] = useState<'idle' | 'sending' | 'done'>('idle')
+
+  async function handleSubmit() {
+    if (!message.trim()) return
+    setState('sending')
+    try {
+      await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, email }),
+      })
+      setState('done')
+      setTimeout(onClose, 2000)
+    } catch {
+      setState('idle')
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="w-full max-w-md bg-slate-900 border border-white/10 rounded-2xl shadow-2xl p-6">
+        {state === 'done' ? (
+          <div className="flex flex-col items-center gap-3 py-4 text-center">
+            <div className="w-10 h-10 rounded-full bg-emerald-500/15 flex items-center justify-center">
+              <svg className="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+              </svg>
+            </div>
+            <p className="text-white font-medium">Thanks for the feedback!</p>
+            <p className="text-slate-500 text-sm">I&apos;ll reach back if needed.</p>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-white font-semibold text-base">Share feedback</h2>
+              <button onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors p-1 rounded-lg hover:bg-white/5">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <textarea
+              // eslint-disable-next-line jsx-a11y/no-autofocus
+              autoFocus
+              rows={4}
+              placeholder="What's working well? What's broken? Any ideas?"
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/40 focus:shadow-[0_0_0_1px_rgba(99,102,241,0.18)] resize-none transition-all mb-3"
+            />
+
+            <input
+              type="email"
+              placeholder="Your email (optional, for follow-up)"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              className="w-full bg-white/[0.04] border border-white/10 rounded-xl px-4 py-3 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/40 focus:shadow-[0_0_0_1px_rgba(99,102,241,0.18)] transition-all mb-4"
+            />
+
+            <button
+              onClick={handleSubmit}
+              disabled={!message.trim() || state === 'sending'}
+              className="w-full flex items-center justify-center gap-2 bg-indigo-500 hover:bg-indigo-400 disabled:bg-indigo-500/40 disabled:cursor-not-allowed text-white rounded-xl py-2.5 text-sm font-semibold transition-all shadow-[0_0_16px_rgba(99,102,241,0.3)]"
+            >
+              {state === 'sending' ? (
+                <>
+                  <span className="inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Sending…
+                </>
+              ) : 'Send feedback'}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function CompanionApp() {
   const { stream, status, error, startSharing, stopSharing } = useScreenShare()
   const { outputCanvasRef, pipStatus, pipMode, pipError, togglePiP, closePiP, updatePiP } = usePiP()
@@ -28,6 +113,7 @@ export default function CompanionApp() {
   const [isReady, setIsReady] = useState(false)
   const [isStarting, setIsStarting] = useState(false)
   const [triggerFeedback, setTriggerFeedback] = useState(false)
+  const [showFeedback, setShowFeedback] = useState(false)
 
   const { analysisCanvasRef, videoRef, isProcessing, currentInstruction } = useVision(stream, goal, sessionId)
   const { target } = useCoordinateStore()
@@ -234,11 +320,14 @@ export default function CompanionApp() {
             </div>
             <span className="text-[15px] font-bold text-white tracking-tight">Via</span>
           </div>
-          <button className="w-8 h-8 flex items-center justify-center text-slate-500 hover:text-slate-300 transition-colors rounded-lg hover:bg-white/5">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 0 1 0-.255c.007-.378-.138-.75-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281Z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+          <button
+            onClick={() => setShowFeedback(true)}
+            className="flex items-center gap-1.5 text-slate-500 hover:text-slate-300 transition-colors text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-white/5"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
             </svg>
+            Feedback
           </button>
         </div>
       </nav>
@@ -465,6 +554,9 @@ export default function CompanionApp() {
         )}
 
       </main>
+
+      {/* ── Feedback modal ── */}
+      {showFeedback && <FeedbackModal onClose={() => setShowFeedback(false)} />}
 
       {/* Hidden output canvas — only used in canvas-PiP fallback mode */}
       <canvas

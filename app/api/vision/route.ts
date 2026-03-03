@@ -2,7 +2,7 @@ import { GoogleGenAI, Type } from '@google/genai'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
-  const { imageBase64, prevFrame, mimeType, goal, history = [], currentInstruction = '', userContext = '' } = await req.json()
+  const { imageBase64, prevFrame, mimeType, goal, history = [], currentInstruction = '', userContext = '', memory = '' } = await req.json()
   const imageSizeKB = Math.round(imageBase64.length * 0.75 / 1024)
   console.log(`[vision] → request  mime=${mimeType} size=${imageSizeKB}KB goal="${goal}" history=${history.length}`)
 
@@ -25,13 +25,19 @@ export async function POST(req: NextRequest) {
     ? `The user has added context about the current situation: "${userContext}"\nTake this into account when deciding the next instruction — for example, if they say an element is disabled or not clickable, suggest an alternative path.\n\n`
     : ''
 
+  const memorySection = memory
+    ? `Your persistent notes from this session (written by you in earlier steps):\n${memory}\n\n`
+    : ''
+
   const prompt = `You are helping a user accomplish this goal: "${goal}"
 
-${historySection}${currentSection}${userContextSection}Analyze the current screenshot and identify the single best UI element the user should interact with NEXT to make progress toward the goal. Do not repeat steps that are already completed. Give exactly one action — never combine multiple actions into one instruction.
+${historySection}${currentSection}${userContextSection}${memorySection}Analyze the current screenshot and identify the single best UI element the user should interact with NEXT to make progress toward the goal. Do not repeat steps that are already completed. Give exactly one action — never combine multiple actions into one instruction.
 
 Keep guiding the user through every micro-step — never assume they will figure something out on their own. The clipboard can only hold one value at a time — always guide the user to copy one value and immediately paste it before moving on to the next copy. For example, after submitting a search query, wait for results to appear and then point to the most relevant result to click.
 
 Never instruct the user to type sensitive values such as API keys, secrets, tokens, or passwords. Instead, assume the user already has the value and tell them to paste it (e.g. "Paste your API key into this field").
+
+Use the "memory" field to store facts you observe that you will likely need later — such as a project name, account name, URL, selected option, or any value the user copied or entered. Always return the complete updated memory string; never truncate previous entries. If there is nothing new to record, return the same memory string unchanged. Keep it concise (key: value pairs on separate lines).
 
 IMPORTANT: If the screenshot shows the Via guidance app itself (e.g. a screen with "What do you want to do?", "Via is active", "End Guide", or a goal input box), the user has not yet navigated to the right place. Do NOT instruct them to interact with the Via UI. Instead, tell them to open a new browser tab and navigate to the website or application needed for the goal (e.g. "Open a new tab and go to vercel.com").
 
@@ -40,6 +46,7 @@ If the next step requires the user to switch to a different browser tab (e.g. to
 Return JSON with:
 - "instruction": a specific, self-contained action the user can immediately follow (e.g. "Click the Search button", "Type 'AI alignment papers' in the search box", "Press Enter"). Always include the exact text to type when the action involves typing.
 - "bbox": [ymin, xmin, ymax, xmax] with coordinates normalized 0–1000
+- "memory": updated persistent notes string (key: value pairs); return previous memory unchanged if nothing new to add
 
 Be very strict about what "Goal complete" means — interpret the goal literally:
 - If the goal says "download", the file must actually be downloading or saved (e.g. a download bar, save dialog, or confirmation is visible). Opening a PDF viewer or preview page is NOT a download.

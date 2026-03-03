@@ -24,7 +24,7 @@ export default function Nav() {
             href="/signup"
             className="ml-2 text-sm bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl px-4 py-2 font-medium transition-all shadow-[0_0_16px_rgba(99,102,241,0.35)] hover:shadow-[0_0_24px_rgba(99,102,241,0.5)]"
           >
-            Get Started
+            Try for free
           </Link>
         </div>
       </div>

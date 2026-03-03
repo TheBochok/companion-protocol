@@ -542,6 +542,33 @@ export default function CompanionApp() {
                 Screen share ended. Start a new guide whenever you&apos;re ready.
               </p>
             )}
+
+            {/* Quick Start example chips */}
+            <div className="flex flex-wrap justify-center gap-2 mt-5">
+              {[
+                { icon: '📚', text: 'Find a recent AI paper on arXiv' },
+                { icon: '🎨', text: 'Resize a canvas in Photopea' },
+                { icon: '🔍', text: 'View the edit history on Wikipedia' },
+              ].map(({ icon, text }) => (
+                <button
+                  key={text}
+                  onClick={() => setGoal(text)}
+                  className="flex items-center gap-2 bg-white/5 hover:bg-white/[0.08] border border-white/10 hover:border-white/20 rounded-full px-4 py-2 text-sm text-slate-400 hover:text-slate-200 transition-all"
+                >
+                  <span>{icon}</span>
+                  <span>{text}</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Micro-stepper */}
+            <div className="flex items-center justify-center gap-3 mt-12 text-[10px] uppercase tracking-widest font-semibold text-slate-500">
+              <span>1. Enter Goal</span>
+              <span className="opacity-50">→</span>
+              <span>2. Share Screen</span>
+              <span className="opacity-50">→</span>
+              <span>3. Follow the Guide</span>
+            </div>
           </div>
         )}
 

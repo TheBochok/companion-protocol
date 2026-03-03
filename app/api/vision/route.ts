@@ -82,6 +82,7 @@ FINAL CHECK before returning "Goal complete": Can you point to a specific UI ele
           properties: {
             instruction: { type: Type.STRING },
             bbox: { type: Type.ARRAY, items: { type: Type.NUMBER } },
+            memory: { type: Type.STRING },
           },
           required: ['instruction'],
         },
@@ -91,7 +92,7 @@ FINAL CHECK before returning "Goal complete": Can you point to a specific UI ele
 
     const elapsed = Date.now() - t0
     const result = JSON.parse(response.text ?? '{"instruction":""}')
-    console.log(`[vision] ← gemini   ${elapsed}ms | instruction="${result.instruction}" bbox=${JSON.stringify(result.bbox)}`)
+    console.log(`[vision] ← gemini   ${elapsed}ms | instruction="${result.instruction}" bbox=${JSON.stringify(result.bbox)} memory=${result.memory?.length ?? 0}ch`)
 
     return NextResponse.json(result)
   } catch (err) {

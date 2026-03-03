@@ -42,6 +42,7 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
       prevInstructionRef.current = ''
       consecutiveCompleteRef.current = 0
       lastEventIdRef.current = null
+      memoryRef.current = ''
     }
     goalRef.current = goal
   }, [goal])
@@ -54,6 +55,7 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
   const historyRef = useRef<string[]>([])
   const prevInstructionRef = useRef('')
   const prevFrameRef = useRef('')
+  const memoryRef = useRef('')
   // Require N consecutive "Goal complete" responses before propagating to avoid false positives
   const consecutiveCompleteRef = useRef(0)
   const COMPLETIONS_REQUIRED = 2
@@ -78,7 +80,20 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
       prevInstructionRef.current = ''
       prevFrameRef.current = ''
       consecutiveCompleteRef.current = 0
+      memoryRef.current = ''
       return
+    }
+
+    // Fire pre-flight research so Gemini starts with background context
+    if (goal) {
+      fetch('/api/research', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ goal }),
+      })
+        .then(r => r.json())
+        .then((d: { research?: string }) => { if (d.research) memoryRef.current = d.research })
+        .catch(() => {})
     }
 
     const video = document.createElement('video')
@@ -182,14 +197,15 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
       fetch('/api/vision', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64, prevFrame: prevFrameRef.current, mimeType: 'image/jpeg', goal: currentGoal, history: historyRef.current, currentInstruction: prevInstructionRef.current, userContext: pendingContextRef.current || undefined }),
+        body: JSON.stringify({ imageBase64: base64, prevFrame: prevFrameRef.current, mimeType: 'image/jpeg', goal: currentGoal, history: historyRef.current, currentInstruction: prevInstructionRef.current, userContext: pendingContextRef.current || undefined, memory: memoryRef.current || undefined }),
         signal: abortController.signal,
       })
         .then(r => r.json())
-        .then((result: { instruction?: string; bbox?: number[] }) => {
+        .then((result: { instruction?: string; bbox?: number[]; memory?: string }) => {
           const newInstruction = result.instruction ?? ''
           const isComplete = newInstruction === 'Goal complete'
           prevFrameRef.current = base64
+          if (result.memory) memoryRef.current = result.memory
 
           if (isComplete) {
             consecutiveCompleteRef.current += 1

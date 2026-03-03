@@ -16,6 +16,8 @@ export interface PiPRenderProps {
   onCancel: () => void
   triggerFeedback: boolean
   onFeedback: (rating: 'up' | 'down', reason?: string) => void
+  chatMessages: { role: 'user' | 'ai'; content: string }[]
+  onChat: (msg: string) => Promise<string>
 }
 
 interface UsePiPReturn {
@@ -40,9 +42,23 @@ const CRITICAL_CSS = `
     0%, 100% { opacity: 1; }
     50%       { opacity: 0.45; }
   }
-  .pip-ping     { animation: pip-ping     1.5s cubic-bezier(0,0,0.2,1) infinite; }
-  .pip-slide-up { animation: pip-slide-up 0.35s ease-out both; }
-  .pip-pulse    { animation: pip-pulse    2s   ease-in-out infinite; }
+  @keyframes pip-swipe-up {
+    0%   { transform: translateY(28px);  opacity: 0; }
+    18%  { transform: translateY(28px);  opacity: 1; }
+    80%  { transform: translateY(-28px); opacity: 1; }
+    100% { transform: translateY(-28px); opacity: 0; }
+  }
+  @keyframes pip-swipe-down {
+    0%   { transform: translateY(-28px); opacity: 0; }
+    18%  { transform: translateY(-28px); opacity: 1; }
+    80%  { transform: translateY(28px);  opacity: 1; }
+    100% { transform: translateY(28px);  opacity: 0; }
+  }
+  .pip-ping       { animation: pip-ping       1.5s cubic-bezier(0,0,0.2,1) infinite; }
+  .pip-slide-up   { animation: pip-slide-up   0.35s ease-out both; }
+  .pip-pulse      { animation: pip-pulse      2s    ease-in-out infinite; }
+  .pip-swipe-up   { animation: pip-swipe-up   1.3s  ease-in-out infinite; }
+  .pip-swipe-down { animation: pip-swipe-down 1.3s  ease-in-out infinite; }
 `
 
 export function usePiP(): UsePiPReturn {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 import type { PiPRenderProps } from '@/hooks/usePiP'
 
 const ZOOM_CYCLE_MS = 6400
@@ -46,7 +46,7 @@ function useVideoDisplayArea(videoEl: HTMLVideoElement | null) {
 
 type FbState = 'none' | 'rating' | 'reason' | 'thanks'
 
-export default function PiPOverlay({ stream, target, instruction, onCancel, triggerFeedback, onFeedback }: PiPRenderProps) {
+export default function PiPOverlay({ stream, target, instruction, onCancel, triggerFeedback, onFeedback, chatMessages, onChat }: PiPRenderProps) {
   const videoRef          = useRef<HTMLVideoElement | null>(null)
   const videoContainerRef = useRef<HTMLDivElement | null>(null)
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null)
@@ -57,6 +57,28 @@ export default function PiPOverlay({ stream, target, instruction, onCancel, trig
   const targetRef = useRef(target)
   useEffect(() => { areaRef.current = area   }, [area])
   useEffect(() => { targetRef.current = target }, [target])
+
+  // Chat state
+  const [chatOpen, setChatOpen] = useState(false)
+  const [chatInput, setChatInput] = useState('')
+  const [isSending, setIsSending] = useState(false)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [chatMessages])
+
+  const handleChatSend = useCallback(async () => {
+    const msg = chatInput.trim()
+    if (!msg || isSending) return
+    setChatInput('')
+    setIsSending(true)
+    try {
+      await onChat(msg)
+    } finally {
+      setIsSending(false)
+    }
+  }, [chatInput, isSending, onChat])
 
   const [fbState, setFbState] = useState<FbState>('none')
   useEffect(() => {
@@ -143,9 +165,13 @@ export default function PiPOverlay({ stream, target, instruction, onCancel, trig
     }
   }, []) // intentionally empty — reads everything from refs
 
-  // Dot position in container-normalised coords
-  const dotX = target ? area.x + (target.x + target.width  / 2) * area.w : null
-  const dotY = target ? area.y + (target.y + target.height / 2) * area.h : null
+  // Detect scroll instructions — show swipe animation instead of dot
+  const isScroll = /\bscroll\b|\bswipe\b/i.test(instruction)
+  const scrollDir: 'up' | 'down' = /\bup\b/i.test(instruction) ? 'up' : 'down'
+
+  // Dot position in container-normalised coords (only used when not scrolling)
+  const dotX = !isScroll && target ? area.x + (target.x + target.width  / 2) * area.w : null
+  const dotY = !isScroll && target ? area.y + (target.y + target.height / 2) * area.h : null
 
   return (
     <div style={{ width: '100%', height: '100vh', position: 'relative', overflow: 'hidden', background: '#000' }}>
@@ -203,8 +229,36 @@ export default function PiPOverlay({ stream, target, instruction, onCancel, trig
         )}
       </div>
 
+      {/* ── Swipe indicator for scroll instructions ── */}
+      {isScroll && !!stream && fbState === 'none' && (
+        <div style={{
+          position: 'absolute', top: '50%', left: '50%',
+          marginLeft: -30, marginTop: -30,
+          pointerEvents: 'none',
+        }}>
+          <div
+            className={scrollDir === 'up' ? 'pip-swipe-up' : 'pip-swipe-down'}
+            style={{
+              width: 60, height: 60, borderRadius: '50%',
+              background: 'rgba(99,102,241,0.2)',
+              border: '2px solid rgba(99,102,241,0.65)',
+              boxShadow: '0 0 28px rgba(99,102,241,0.45)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <svg width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="rgba(255,255,255,0.85)" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round"
+                d={scrollDir === 'up'
+                  ? 'M4.5 15.75l7.5-7.5 7.5 7.5'
+                  : 'M19.5 8.25l-7.5 7.5-7.5-7.5'}
+              />
+            </svg>
+          </div>
+        </div>
+      )}
+
       {/* ── Scanning dots (outside the zoom container so they stay centered) ── */}
-      {!target && !!stream && fbState === 'none' && (
+      {!target && !isScroll && !!stream && fbState === 'none' && (
         <div style={{
           position: 'absolute', top: '50%', left: '50%',
           transform: 'translate(-50%, -50%)',
@@ -222,6 +276,120 @@ export default function PiPOverlay({ stream, target, instruction, onCancel, trig
               }}
             />
           ))}
+        </div>
+      )}
+
+      {/* ── Chat panel (above the pill) ── */}
+      {chatOpen && fbState === 'none' && (
+        <div style={{
+          position: 'absolute',
+          bottom: 82,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          width: '82%',
+          maxWidth: 580,
+          background: 'rgba(2, 6, 23, 0.92)',
+          backdropFilter: 'blur(24px)',
+          WebkitBackdropFilter: 'blur(24px)',
+          border: '1px solid rgba(255,255,255,0.09)',
+          borderRadius: 16,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column',
+          maxHeight: 280,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+        }}>
+          {/* Messages */}
+          <div style={{
+            flex: 1,
+            overflowY: 'auto',
+            padding: '10px 12px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 7,
+            minHeight: 48,
+          }}>
+            {chatMessages.length === 0 && !isSending && (
+              <p style={{ color: '#475569', fontSize: 12, textAlign: 'center', margin: 'auto' }}>
+                Ask Via anything about this step…
+              </p>
+            )}
+            {chatMessages.map((msg, i) => (
+              <div key={i} style={{ display: 'flex', justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start' }}>
+                <div style={{
+                  maxWidth: '78%',
+                  padding: '6px 11px',
+                  borderRadius: msg.role === 'user' ? '13px 13px 4px 13px' : '13px 13px 13px 4px',
+                  background: msg.role === 'user' ? 'rgba(99,102,241,0.22)' : 'rgba(255,255,255,0.06)',
+                  border: `1px solid ${msg.role === 'user' ? 'rgba(99,102,241,0.28)' : 'rgba(255,255,255,0.08)'}`,
+                  color: msg.role === 'user' ? '#c7d2fe' : '#cbd5e1',
+                  fontSize: 12,
+                  lineHeight: 1.5,
+                }}>
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+            {isSending && (
+              <div style={{ display: 'flex', gap: 4, padding: '6px 11px', alignSelf: 'flex-start' }}>
+                {[0, 1, 2].map(i => (
+                  <div
+                    key={i}
+                    className="pip-pulse"
+                    style={{ width: 6, height: 6, borderRadius: '50%', background: '#6366f1', animationDelay: `${i * 0.22}s` }}
+                  />
+                ))}
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+
+          {/* Input row */}
+          <div style={{
+            padding: '7px 9px',
+            borderTop: '1px solid rgba(255,255,255,0.06)',
+            display: 'flex',
+            gap: 6,
+            alignItems: 'center',
+          }}>
+            <input
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) handleChatSend() }}
+              placeholder="Ask Via anything…"
+              style={{
+                flex: 1,
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.08)',
+                borderRadius: 9999,
+                padding: '5px 12px',
+                color: '#e2e8f0',
+                fontSize: 12,
+                outline: 'none',
+                fontFamily: 'ui-sans-serif, system-ui, sans-serif',
+              }}
+            />
+            <button
+              onClick={handleChatSend}
+              disabled={!chatInput.trim() || isSending}
+              style={{
+                background: chatInput.trim() && !isSending ? '#4f46e5' : 'rgba(99,102,241,0.18)',
+                border: 'none',
+                borderRadius: '50%',
+                width: 28, height: 28,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: chatInput.trim() && !isSending ? 'pointer' : 'not-allowed',
+                color: '#fff',
+                flexShrink: 0,
+                transition: 'background 0.15s',
+              }}
+            >
+              <svg width="12" height="12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+              </svg>
+            </button>
+          </div>
         </div>
       )}
 
@@ -246,6 +414,9 @@ export default function PiPOverlay({ stream, target, instruction, onCancel, trig
             fontFamily: 'ui-sans-serif, system-ui, sans-serif',
           }}
         >
+          {/* Chat toggle */}
+          <ChatToggle open={chatOpen} onClick={() => setChatOpen(o => !o)} unread={chatMessages.length > 0 && !chatOpen} />
+
           {/* Instruction */}
           <span style={{
             color: '#f1f5f9', fontSize: 13, fontWeight: 500,
@@ -259,6 +430,43 @@ export default function PiPOverlay({ stream, target, instruction, onCancel, trig
         </div>
       ) : null}
     </div>
+  )
+}
+
+function ChatToggle({ open, onClick, unread }: { open: boolean; onClick: () => void; unread: boolean }) {
+  const [hovered, setHovered] = useState(false)
+  return (
+    <button
+      onClick={onClick}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        position: 'relative',
+        flexShrink: 0,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        width: 28, height: 28,
+        background: open
+          ? 'rgba(99,102,241,0.25)'
+          : hovered ? 'rgba(99,102,241,0.12)' : 'rgba(255,255,255,0.05)',
+        border: `1px solid ${open ? 'rgba(99,102,241,0.4)' : hovered ? 'rgba(99,102,241,0.25)' : 'rgba(255,255,255,0.08)'}`,
+        borderRadius: 9999,
+        cursor: 'pointer',
+        transition: 'all 0.15s',
+        color: open ? '#a5b4fc' : hovered ? '#818cf8' : '#64748b',
+      }}
+    >
+      <svg width="13" height="13" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
+      </svg>
+      {unread && (
+        <span style={{
+          position: 'absolute', top: 0, right: 0,
+          width: 7, height: 7, borderRadius: '50%',
+          background: '#6366f1',
+          border: '1.5px solid rgba(2,6,23,0.9)',
+        }} />
+      )}
+    </button>
   )
 }
 

@@ -23,6 +23,7 @@ interface UseVisionReturn {
   isProcessing: boolean
   currentInstruction: string
   injectContext: (text: string) => void
+  forceInstruction: (instruction: string) => void
 }
 
 export function useVision(stream: MediaStream | null, goal: string, sessionId: string | null): UseVisionReturn {
@@ -63,9 +64,21 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
   // Analytics: track the last logged event id so we can update its acted status later
   const lastEventIdRef = useRef<string | null>(null)
 
+  // Generation counter — incremented by forceInstruction to invalidate in-flight requests
+  const generationRef = useRef(0)
+
   // One-shot user context — included in the next vision call then cleared
   const pendingContextRef = useRef('')
   const injectContext = useCallback((text: string) => { pendingContextRef.current = text }, [])
+
+  // Immediately override the displayed instruction (e.g. from chat redirect).
+  // Increments generationRef so any in-flight vision request discards its result.
+  const forceInstruction = useCallback((instruction: string) => {
+    generationRef.current += 1
+    prevInstructionRef.current = instruction
+    setCurrentInstruction(instruction)
+    setTarget(null)
+  }, [setTarget])
 
   useEffect(() => {
     if (!stream) {
@@ -177,6 +190,7 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
       isRunning = true
       lastCallTime = now
       setIsProcessing(true)
+      const myGeneration = generationRef.current
 
       const ctx = canvas.getContext('2d')
       if (!ctx) { isRunning = false; setIsProcessing(false); return }
@@ -192,16 +206,21 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
       }
 
       abortController = new AbortController()
-      pendingContextRef.current = ''  // consume immediately so it's not sent twice
+      // Consume pending context now (before async boundary) so it isn't sent twice
+      const userContext = pendingContextRef.current
+      pendingContextRef.current = ''
 
       fetch('/api/vision', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageBase64: base64, prevFrame: prevFrameRef.current, mimeType: 'image/jpeg', goal: currentGoal, history: historyRef.current, currentInstruction: prevInstructionRef.current, userContext: pendingContextRef.current || undefined, memory: memoryRef.current || undefined }),
+        body: JSON.stringify({ imageBase64: base64, prevFrame: prevFrameRef.current, mimeType: 'image/jpeg', goal: currentGoal, history: historyRef.current, currentInstruction: prevInstructionRef.current, userContext: userContext || undefined, memory: memoryRef.current || undefined }),
         signal: abortController.signal,
       })
         .then(r => r.json())
         .then((result: { instruction?: string; bbox?: number[]; memory?: string }) => {
+          // forceInstruction was called while this request was in flight — discard
+          if (generationRef.current !== myGeneration) return
+
           const newInstruction = result.instruction ?? ''
           const isComplete = newInstruction === 'Goal complete'
           prevFrameRef.current = base64
@@ -255,7 +274,8 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
           prevInstructionRef.current = newInstruction
           setCurrentInstruction(newInstruction)
           const isTabSwitch = /switch.{0,20}tab|open.{0,20}(new tab|tab)/i.test(newInstruction)
-          if (!isTabSwitch && Array.isArray(result.bbox) && result.bbox.length === 4) {
+          const isScroll = /\bscroll\b|\bswipe\b/i.test(newInstruction)
+          if (!isTabSwitch && !isScroll && Array.isArray(result.bbox) && result.bbox.length === 4) {
             const [ymin, xmin, ymax, xmax] = result.bbox
             setTarget({
               x: xmin / 1000,
@@ -296,5 +316,5 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
     }
   }, [stream, setTarget])
 
-  return { analysisCanvasRef, videoRef, isProcessing, currentInstruction, injectContext }
+  return { analysisCanvasRef, videoRef, isProcessing, currentInstruction, injectContext, forceInstruction }
 }

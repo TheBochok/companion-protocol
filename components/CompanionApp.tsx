@@ -108,15 +108,66 @@ export default function CompanionApp() {
   const [isStarting, setIsStarting] = useState(false)
   const [triggerFeedback, setTriggerFeedback] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
-  const [contextInput, setContextInput] = useState('')
-  const [contextSent, setContextSent] = useState(false)
+  const [chatInput, setChatInput] = useState('')
+  const [isChatSending, setIsChatSending] = useState(false)
+  const [liveChatMessages, setLiveChatMessages] = useState<ChatMsg[]>([])
+  const liveChatRef = useRef<ChatMsg[]>([])
+  const liveGoalRef = useRef(goal)
+  const liveInstructionRef = useRef('')
 
-  const { analysisCanvasRef, videoRef, isProcessing, currentInstruction, injectContext } = useVision(stream, goal, sessionId)
+  const { analysisCanvasRef, videoRef, isProcessing, currentInstruction, injectContext, forceInstruction } = useVision(stream, goal, sessionId)
   const { target } = useCoordinateStore()
 
   // Ref so the canvas RAF loop always reads the latest instruction without restarting
   const instructionRef = useRef(currentInstruction)
   useEffect(() => { instructionRef.current = currentInstruction }, [currentInstruction])
+
+  // Keep goal/instruction fresh inside handleChat without causing re-creation
+  useEffect(() => { liveGoalRef.current = goal }, [goal])
+  useEffect(() => { liveInstructionRef.current = currentInstruction }, [currentInstruction])
+
+  const chatScrollRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight
+  }, [liveChatMessages])
+
+  const handleChat = useCallback(async (msg: string): Promise<string> => {
+    const history = liveChatRef.current
+    const withUser: ChatMsg[] = [...history, { role: 'user', content: msg }]
+    liveChatRef.current = withUser
+    setLiveChatMessages(withUser)
+    // Inject context so vision loop re-aligns on the next frame
+    injectContext(msg)
+    setIsChatSending(true)
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: msg,
+          goal: liveGoalRef.current,
+          currentInstruction: liveInstructionRef.current,
+          history,
+        }),
+      })
+      const data = await res.json()
+      const reply: string = data.reply ?? ''
+      // Immediately redirect the guidance instruction from the chat response
+      if (data.instruction) forceInstruction(data.instruction)
+      const withReply: ChatMsg[] = [...withUser, { role: 'ai', content: reply }]
+      liveChatRef.current = withReply
+      setLiveChatMessages(withReply)
+      return reply
+    } catch {
+      const errMsg = "Sorry, something went wrong."
+      const withErr: ChatMsg[] = [...withUser, { role: 'ai', content: errMsg }]
+      liveChatRef.current = withErr
+      setLiveChatMessages(withErr)
+      return errMsg
+    } finally {
+      setIsChatSending(false)
+    }
+  }, [injectContext, forceInstruction])
 
   // Reset clarification state when native stop-sharing is used
   useEffect(() => {
@@ -126,6 +177,8 @@ export default function CompanionApp() {
       setIsReady(false)
       setSessionId(null)
       setTriggerFeedback(false)
+      setLiveChatMessages([])
+      liveChatRef.current = []
     }
   }, [status])
 
@@ -137,9 +190,9 @@ export default function CompanionApp() {
   // ── Document PiP: keep overlay in sync ────────────────────────────────────
   useEffect(() => {
     if (status !== 'active' || pipMode !== 'document') return
-    updatePiP({ stream, target, instruction: currentInstruction, onCancel: handleEndGuide, triggerFeedback, onFeedback: handleFeedback })
+    updatePiP({ stream, target, instruction: currentInstruction, onCancel: handleEndGuide, triggerFeedback, onFeedback: handleFeedback, chatMessages: liveChatMessages, onChat: handleChat })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, pipMode, pipStatus, stream, target, currentInstruction, triggerFeedback])
+  }, [status, pipMode, pipStatus, stream, target, currentInstruction, triggerFeedback, liveChatMessages])
 
   // ── Canvas PiP fallback: resize output canvas to match video stream ───────
   useEffect(() => {
@@ -280,6 +333,8 @@ export default function CompanionApp() {
     setIsReady(false)
     setSessionId(null)
     setTriggerFeedback(false)
+    setLiveChatMessages([])
+    liveChatRef.current = []
   }, [closePiP, stopSharing])
 
   const handleEndGuideRef = useRef(handleEndGuide)
@@ -376,37 +431,57 @@ export default function CompanionApp() {
                 </div>
               )}
 
-              {/* Context input */}
-              <div className="relative bg-white/[0.03] border border-white/[0.06] rounded-xl focus-within:border-indigo-500/30 transition-all duration-200 mb-4">
-                <input
-                  className="w-full h-11 bg-transparent pl-4 pr-16 text-white text-sm placeholder:text-slate-600 focus:outline-none rounded-xl"
-                  placeholder="Something blocking you? Tell Via…"
-                  value={contextInput}
-                  onChange={e => { setContextInput(e.target.value); setContextSent(false) }}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && contextInput.trim()) {
-                      injectContext(contextInput.trim())
-                      setContextInput('')
-                      setContextSent(true)
-                    }
-                  }}
-                />
-                {contextSent ? (
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-emerald-400 font-medium">Sent ✓</span>
-                ) : (
+              {/* Chat */}
+              <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl overflow-hidden mb-4">
+                {liveChatMessages.length > 0 && (
+                  <div ref={chatScrollRef} className="max-h-44 overflow-y-auto p-3 space-y-2">
+                    {liveChatMessages.map((msg, i) => (
+                      <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`max-w-[82%] px-3 py-2 rounded-xl text-xs leading-relaxed ${
+                          msg.role === 'user'
+                            ? 'bg-indigo-500/20 border border-indigo-500/25 text-indigo-100'
+                            : 'bg-white/[0.05] border border-white/[0.07] text-slate-300'
+                        }`}>
+                          {msg.content}
+                        </div>
+                      </div>
+                    ))}
+                    {isChatSending && (
+                      <div className="flex justify-start">
+                        <div className="bg-white/[0.05] border border-white/[0.07] rounded-xl px-3 py-2 flex gap-1">
+                          {[0, 1, 2].map(i => (
+                            <div key={i} className="w-1.5 h-1.5 rounded-full bg-slate-600 animate-bounce" style={{ animationDelay: `${i * 0.12}s` }} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className={`relative ${liveChatMessages.length > 0 ? 'border-t border-white/[0.04]' : ''}`}>
+                  <input
+                    className="w-full h-11 bg-transparent pl-4 pr-14 text-white text-sm placeholder:text-slate-600 focus:outline-none"
+                    placeholder="Ask Via anything…"
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && chatInput.trim() && !isChatSending) {
+                        handleChat(chatInput.trim())
+                        setChatInput('')
+                      }
+                    }}
+                  />
                   <button
                     onClick={() => {
-                      if (!contextInput.trim()) return
-                      injectContext(contextInput.trim())
-                      setContextInput('')
-                      setContextSent(true)
+                      if (!chatInput.trim() || isChatSending) return
+                      handleChat(chatInput.trim())
+                      setChatInput('')
                     }}
-                    disabled={!contextInput.trim()}
+                    disabled={!chatInput.trim() || isChatSending}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-indigo-400 hover:text-indigo-300 disabled:text-slate-700 font-medium transition-colors"
                   >
                     Send
                   </button>
-                )}
+                </div>
               </div>
 
               {pipStatus !== 'active' && (

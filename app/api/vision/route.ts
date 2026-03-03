@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
 
 ${historySection}${currentSection}${userContextSection}${memorySection}Analyze the current screenshot and identify the single best UI element the user should interact with NEXT to make progress toward the goal. Do not repeat steps that are already completed. Give exactly one action — never combine multiple actions into one instruction.
 
-Keep guiding the user through every micro-step — never assume they will figure something out on their own. The clipboard can only hold one value at a time — always guide the user to copy one value and immediately paste it before moving on to the next copy. For example, after submitting a search query, wait for results to appear and then point to the most relevant result to click.
+Keep guiding the user through every micro-step — never assume they will figure something out on their own. The user cannot save or write down text anywhere — the clipboard is the only way to hold a value temporarily, and it holds exactly one value at a time. Always guide the user to copy one value and immediately paste it before moving on to the next copy. Never tell the user to "note", "save", "write down", or "remember" a value — instead, always guide them to copy it to the clipboard right now and paste it where it is needed next. For example, after submitting a search query, wait for results to appear and then point to the most relevant result to click.
 
 Never instruct the user to type sensitive values such as API keys, secrets, tokens, or passwords. Instead, assume the user already has the value and tell them to paste it (e.g. "Paste your API key into this field").
 

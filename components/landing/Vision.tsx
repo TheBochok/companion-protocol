@@ -15,7 +15,7 @@ const bullets = [
 
 export default function Vision() {
   return (
-    <section className="relative py-24 px-6 overflow-hidden">
+    <section className="relative py-16 md:py-24 px-6 overflow-hidden">
       {/* Subtle background */}
       <div className="absolute inset-0 bg-[#060a13]" />
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_50%_100%,rgba(99,102,241,0.06),transparent_60%)] pointer-events-none" />
@@ -43,7 +43,7 @@ export default function Vision() {
         <p className="text-indigo-400 text-xs uppercase tracking-widest font-semibold mb-4">
           Security & Privacy
         </p>
-        <h2 className="text-4xl font-bold text-white tracking-tighter mb-10 leading-tight">
+        <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tighter mb-8 md:mb-10 leading-tight">
           Guides you.
           <br />
           <span className="text-slate-400">Never controls you.</span>
@@ -54,7 +54,7 @@ export default function Vision() {
           {bullets.map((b) => (
             <div
               key={b.title}
-              className="flex gap-4 bg-slate-800/20 border border-white/[0.05] rounded-xl px-6 py-5"
+              className="flex gap-4 bg-slate-800/20 border border-white/[0.05] rounded-xl px-4 py-4 md:px-6 md:py-5"
             >
               <div className="flex-shrink-0 mt-0.5">
                 <svg

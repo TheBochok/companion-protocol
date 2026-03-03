@@ -28,10 +28,10 @@ function Check() {
 
 export default function TwoWorlds() {
   return (
-    <section className="py-24 px-6">
+    <section className="py-16 md:py-24 px-6">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold text-white tracking-tight mb-4">
+          <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tight mb-4">
             Built for two worlds.
           </h2>
           <p className="text-slate-400 text-sm max-w-lg mx-auto leading-relaxed">
@@ -41,7 +41,7 @@ export default function TwoWorlds() {
 
         <div className="grid md:grid-cols-2 gap-5">
           {/* B2C — cool-blue aura */}
-          <div className="relative bg-slate-800/25 backdrop-blur-xl border border-white/[0.07] rounded-2xl p-10 overflow-hidden">
+          <div className="relative bg-slate-800/25 backdrop-blur-xl border border-white/[0.07] rounded-2xl p-6 md:p-10 overflow-hidden">
             {/* Aura */}
             <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(ellipse_at_top_left,rgba(59,130,246,0.08),transparent_60%)] pointer-events-none" />
 
@@ -69,7 +69,7 @@ export default function TwoWorlds() {
           </div>
 
           {/* B2B — indigo aura */}
-          <div className="relative bg-slate-800/25 backdrop-blur-xl border border-indigo-500/20 rounded-2xl p-10 overflow-hidden">
+          <div className="relative bg-slate-800/25 backdrop-blur-xl border border-indigo-500/20 rounded-2xl p-6 md:p-10 overflow-hidden">
             {/* Aura */}
             <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(ellipse_at_top_right,rgba(99,102,241,0.10),transparent_60%)] pointer-events-none" />
             {/* Subtle glow ring */}

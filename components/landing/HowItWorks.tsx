@@ -1,12 +1,12 @@
 export default function HowItWorks() {
   return (
-    <section className="py-24 px-6">
+    <section className="py-16 md:py-24 px-6">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-16">
           <p className="text-indigo-400 text-xs uppercase tracking-widest font-semibold mb-4">
             Why Use Via
           </p>
-          <h2 className="text-4xl font-bold text-white tracking-tighter mb-4 leading-tight">
+          <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tighter mb-4 leading-tight">
             Stop answering{' '}
             <span className="text-slate-400">&ldquo;How do I do this?&rdquo;</span>
           </h2>
@@ -18,7 +18,7 @@ export default function HowItWorks() {
         <div className="grid md:grid-cols-2 gap-5">
 
           {/* Card 1 — For Teams */}
-          <div className="relative bg-slate-800/20 border border-white/[0.06] rounded-2xl p-10 overflow-hidden">
+          <div className="relative bg-slate-800/20 border border-white/[0.06] rounded-2xl p-6 md:p-10 overflow-hidden">
             {/* Aura */}
             <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(ellipse_at_bottom_left,rgba(59,130,246,0.07),transparent_60%)] pointer-events-none" />
 
@@ -52,7 +52,7 @@ export default function HowItWorks() {
           </div>
 
           {/* Card 2 — For Individuals */}
-          <div className="relative bg-slate-800/20 border border-indigo-500/15 rounded-2xl p-10 overflow-hidden">
+          <div className="relative bg-slate-800/20 border border-indigo-500/15 rounded-2xl p-6 md:p-10 overflow-hidden">
             {/* Aura */}
             <div className="absolute inset-0 rounded-2xl bg-[radial-gradient(ellipse_at_top_right,rgba(99,102,241,0.09),transparent_60%)] pointer-events-none" />
 
@@ -70,7 +70,7 @@ export default function HowItWorks() {
               </p>
 
               {/* Mini visual — any app logos placeholder */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center flex-wrap gap-2">
                 {['Figma', 'AWS', 'Jira', 'Notion', '+ more'].map((label, i) => (
                   <div
                     key={label}

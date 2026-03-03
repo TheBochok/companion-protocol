@@ -1,6 +1,6 @@
 export default function Solution() {
   return (
-    <section className="py-24 px-6 overflow-hidden" id="use-cases">
+    <section className="py-16 md:py-24 px-6 overflow-hidden" id="use-cases">
       <div className="max-w-7xl mx-auto">
         <div className="grid lg:grid-cols-2 gap-16 items-center">
 
@@ -9,7 +9,7 @@ export default function Solution() {
             <p className="text-indigo-400 text-xs uppercase tracking-widest font-semibold mb-4">
               How Via Works
             </p>
-            <h2 className="text-4xl font-bold text-white tracking-tighter mb-5 leading-tight">
+            <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tighter mb-5 leading-tight">
               Real-time visual guidance.
               <br />
               <span className="text-slate-400">Zero integration required.</span>

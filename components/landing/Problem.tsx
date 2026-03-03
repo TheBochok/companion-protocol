@@ -1,12 +1,12 @@
 export default function Problem() {
   return (
-    <section className="py-24 px-6">
+    <section className="py-16 md:py-24 px-6">
       <div className="max-w-7xl mx-auto">
         {/* Section label */}
         <p className="text-indigo-400 text-xs uppercase tracking-widest font-semibold mb-4">
           The Problem
         </p>
-        <h2 className="text-4xl font-bold text-white tracking-tighter mb-12 leading-tight">
+        <h2 className="text-3xl sm:text-4xl font-bold text-white tracking-tighter mb-10 md:mb-12 leading-tight">
           Software is powerful.
           <br />
           <span className="text-slate-400">Learning it is broken.</span>
@@ -16,7 +16,7 @@ export default function Problem() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 
           {/* Large card — spans 2 columns */}
-          <div className="md:col-span-2 relative bg-slate-800/20 border border-white/[0.06] rounded-2xl p-10 overflow-hidden">
+          <div className="md:col-span-2 relative bg-slate-800/20 border border-white/[0.06] rounded-2xl p-6 md:p-10 overflow-hidden">
             {/* Corner glow */}
             <div className="absolute top-0 left-0 w-64 h-64 bg-[radial-gradient(ellipse_at_top_left,rgba(99,102,241,0.07),transparent_60%)] pointer-events-none" />
 
@@ -44,7 +44,7 @@ export default function Problem() {
           <div className="flex flex-col gap-4">
 
             {/* Card 2 */}
-            <div className="relative bg-slate-800/20 border border-white/[0.06] rounded-2xl p-7 overflow-hidden flex-1">
+            <div className="relative bg-slate-800/20 border border-white/[0.06] rounded-2xl p-5 md:p-7 overflow-hidden flex-1">
               <div className="absolute bottom-0 right-0 w-32 h-32 bg-[radial-gradient(ellipse_at_bottom_right,rgba(251,191,36,0.05),transparent_60%)] pointer-events-none" />
               <div className="relative">
                 <div className="w-8 h-8 rounded-lg bg-yellow-500/10 border border-yellow-500/15 flex items-center justify-center mb-5">
@@ -62,7 +62,7 @@ export default function Problem() {
             </div>
 
             {/* Card 3 */}
-            <div className="relative bg-slate-800/20 border border-white/[0.06] rounded-2xl p-7 overflow-hidden flex-1">
+            <div className="relative bg-slate-800/20 border border-white/[0.06] rounded-2xl p-5 md:p-7 overflow-hidden flex-1">
               <div className="absolute top-0 right-0 w-32 h-32 bg-[radial-gradient(ellipse_at_top_right,rgba(99,102,241,0.06),transparent_60%)] pointer-events-none" />
               <div className="relative">
                 <div className="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/15 flex items-center justify-center mb-5">

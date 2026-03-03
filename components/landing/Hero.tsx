@@ -2,12 +2,12 @@ import Link from 'next/link'
 
 export default function Hero() {
   return (
-    <section className="relative pt-20 pb-12 px-6 overflow-hidden" id="product">
+    <section className="relative pt-14 pb-10 md:pt-20 md:pb-12 px-6 overflow-hidden" id="product">
       {/* Subtle top-left glow — asymmetric */}
       <div className="absolute -top-32 -left-32 w-[600px] h-[500px] bg-[radial-gradient(ellipse_at_center,rgba(99,102,241,0.09),transparent_65%)] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+        <div className="grid lg:grid-cols-2 gap-8 lg:gap-20 items-center">
 
           {/* ── Left: Text ── */}
           <div>
@@ -20,7 +20,7 @@ export default function Hero() {
             </div>
 
             {/* H1 */}
-            <h1 className="text-5xl sm:text-6xl lg:text-[64px] font-bold text-white leading-[1.06] tracking-tighter mb-5">
+            <h1 className="text-4xl sm:text-5xl lg:text-[64px] font-bold text-white leading-[1.06] tracking-tighter mb-5">
               The guide that
               <br />
               lives on your
@@ -31,7 +31,7 @@ export default function Hero() {
             </h1>
 
             {/* Subhead */}
-            <p className="text-slate-400 text-lg leading-relaxed mb-9 max-w-md">
+            <p className="text-slate-400 text-base lg:text-lg leading-relaxed mb-7 lg:mb-9 max-w-md">
               Via watches your screen and delivers real-time, context-aware guidance —
               exactly when you need it, without switching windows.
             </p>

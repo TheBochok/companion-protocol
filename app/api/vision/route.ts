@@ -73,7 +73,7 @@ FINAL CHECK before returning "Goal complete": Can you point to a specific UI ele
         ]
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-3.1-flash-lite-preview',
       contents,
       config: {
         responseMimeType: 'application/json',

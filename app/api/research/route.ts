@@ -25,7 +25,7 @@ Be factual and brief. This will be used as background context for a visual AI gu
   try {
     const t0 = Date.now()
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-3.1-flash-lite-preview',
       contents: [{ text: prompt }],
       config: {
         tools: [{ googleSearch: {} }],

@@ -26,7 +26,7 @@ Return JSON with:
   try {
     const t0 = Date.now()
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-3.1-flash-lite-preview',
       contents: [{ text: prompt }],
       config: {
         responseMimeType: 'application/json',

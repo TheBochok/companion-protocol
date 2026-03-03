@@ -112,6 +112,11 @@ export default function CompanionApp() {
   const [isChatSending, setIsChatSending] = useState(false)
   const [liveChatMessages, setLiveChatMessages] = useState<ChatMsg[]>([])
   const liveChatRef = useRef<ChatMsg[]>([])
+  // Mobile fallback state
+  const [mobileEmail, setMobileEmail] = useState('')
+  const [mobileEmailSent, setMobileEmailSent] = useState(false)
+  const [isSendingEmail, setIsSendingEmail] = useState(false)
+  const [copiedLink, setCopiedLink] = useState(false)
   const liveGoalRef = useRef(goal)
   const liveInstructionRef = useRef('')
 
@@ -363,6 +368,26 @@ export default function CompanionApp() {
     router.push('/login')
   }
 
+  async function handleMobileReminder() {
+    if (!mobileEmail.trim()) return
+    setIsSendingEmail(true)
+    try {
+      await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: `Mobile reminder request: ${mobileEmail}` }),
+      })
+    } catch { /* optimistic */ }
+    setMobileEmailSent(true)
+    setIsSendingEmail(false)
+  }
+
+  function handleCopyLink() {
+    navigator.clipboard.writeText(window.location.href).catch(() => {})
+    setCopiedLink(true)
+    setTimeout(() => setCopiedLink(false), 2000)
+  }
+
   const isActive = status === 'active'
 
   return (
@@ -400,8 +425,73 @@ export default function CompanionApp() {
         </div>
       </nav>
 
-      {/* ── Main content ── */}
-      <main className="min-h-screen flex flex-col items-center justify-center px-6 pt-14">
+      {/* ── Mobile Fallback (visible only on small viewports) ── */}
+      <div className="flex flex-col md:hidden min-h-screen items-center justify-center px-6 pt-14 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900/20 via-slate-950 to-slate-950">
+        <div className="flex flex-col items-center w-full max-w-sm text-center">
+
+          {/* Glowing monitor icon */}
+          <div className="relative flex items-center justify-center w-20 h-20">
+            <div className="absolute inset-0 rounded-full bg-indigo-500/15 blur-2xl" />
+            <div className="relative w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center shadow-[0_0_32px_rgba(99,102,241,0.2)]">
+              <svg className="w-8 h-8 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 17.25v1.007a3 3 0 0 1-.879 2.122L7.5 21h9l-.621-.621A3 3 0 0 1 15 18.257V17.25m6-12V15a2.25 2.25 0 0 1-2.25 2.25H5.25A2.25 2.25 0 0 1 3 15V5.25m18 0A2.25 2.25 0 0 0 18.75 3H5.25A2.25 2.25 0 0 0 3 5.25m18 0H3" />
+              </svg>
+            </div>
+          </div>
+
+          <h1 className="text-2xl text-white font-semibold mt-6">
+            Built for the big screen.
+          </h1>
+          <p className="text-slate-400 mt-4 leading-relaxed">
+            Via uses advanced screen-sharing and Picture-in-Picture to guide you through complex software. To experience the magic, open this link on your Mac or PC.
+          </p>
+
+          {/* Lead capture */}
+          <div className="w-full mt-10">
+            {mobileEmailSent ? (
+              <div className="flex items-center justify-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-5 py-4">
+                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                </svg>
+                <p className="text-emerald-300 text-sm font-medium">Reminder sent!</p>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  placeholder="your@email.com"
+                  value={mobileEmail}
+                  onChange={e => setMobileEmail(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleMobileReminder()}
+                  className="flex-1 h-12 bg-white/[0.04] border border-white/10 rounded-xl px-4 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:border-indigo-500/40 focus:shadow-[0_0_0_1px_rgba(99,102,241,0.18)] transition-all"
+                />
+                <button
+                  onClick={handleMobileReminder}
+                  disabled={!mobileEmail.trim() || isSendingEmail}
+                  className="h-12 px-5 bg-indigo-500 hover:bg-indigo-400 disabled:bg-indigo-500/40 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition-all shadow-[0_0_16px_rgba(99,102,241,0.3)] whitespace-nowrap"
+                >
+                  {isSendingEmail
+                    ? <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    : 'Send reminder'}
+                </button>
+              </div>
+            )}
+
+            <button
+              onClick={handleCopyLink}
+              className="flex items-center justify-center gap-1.5 text-sm text-slate-500 hover:text-white mt-6 w-full transition-colors"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" />
+              </svg>
+              {copiedLink ? 'Copied!' : 'or copy link to clipboard'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Main content (desktop only) ── */}
+      <main className="min-h-screen hidden md:flex flex-col items-center justify-center px-6 pt-14">
 
         {/* ── ACTIVE STATE ── */}
         {isActive && (

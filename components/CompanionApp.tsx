@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useRef, useCallback, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 import { useScreenShare } from '@/hooks/useScreenShare'
 import { usePiP } from '@/hooks/usePiP'
 import { useVision } from '@/hooks/useVision'
@@ -93,6 +95,7 @@ function FeedbackModal({ onClose }: { onClose: () => void }) {
 }
 
 export default function CompanionApp() {
+  const router = useRouter()
   const { stream, status, error, startSharing, stopSharing } = useScreenShare()
   const { outputCanvasRef, pipStatus, pipMode, pipError, togglePiP, closePiP, updatePiP } = usePiP()
   const [goal, setGoal] = useState('')
@@ -299,6 +302,12 @@ export default function CompanionApp() {
     setIsReady(false)
   }
 
+  async function handleSignOut() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
   const isActive = status === 'active'
 
   return (
@@ -313,15 +322,26 @@ export default function CompanionApp() {
             </div>
             <span className="text-[15px] font-bold text-white tracking-tight">Via</span>
           </div>
-          <button
-            onClick={() => setShowFeedback(true)}
-            className="flex items-center gap-1.5 text-indigo-300 hover:text-white border border-indigo-500/40 hover:border-indigo-400/60 bg-indigo-500/10 hover:bg-indigo-500/20 transition-all text-xs font-semibold px-3 py-1.5 rounded-lg shadow-[0_0_10px_rgba(99,102,241,0.15)]"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
-            </svg>
-            Feedback
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowFeedback(true)}
+              className="flex items-center gap-1.5 text-indigo-300 hover:text-white border border-indigo-500/40 hover:border-indigo-400/60 bg-indigo-500/10 hover:bg-indigo-500/20 transition-all text-xs font-semibold px-3 py-1.5 rounded-lg shadow-[0_0_10px_rgba(99,102,241,0.15)]"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 0 1 .865-.501 48.172 48.172 0 0 0 3.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0 0 12 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018Z" />
+              </svg>
+              Feedback
+            </button>
+            <button
+              onClick={handleSignOut}
+              className="flex items-center gap-1.5 text-slate-400 hover:text-slate-200 border border-white/10 hover:border-white/20 bg-white/[0.03] hover:bg-white/[0.06] transition-all text-xs font-semibold px-3 py-1.5 rounded-lg"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+              </svg>
+              Sign out
+            </button>
+          </div>
         </div>
       </nav>
 

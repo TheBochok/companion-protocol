@@ -29,7 +29,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
       : await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: `${location.origin}/auth/callback` },
+          options: { emailRedirectTo: 'https://www.usevia.tech/auth/callback' },
         })
 
     if (error) {
@@ -46,7 +46,7 @@ export default function AuthForm({ mode }: AuthFormProps) {
     setGoogleLoading(true)
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${location.origin}/auth/callback` },
+      options: { redirectTo: 'https://www.usevia.tech/auth/callback' },
     })
     if (error) {
       setError(error.message)

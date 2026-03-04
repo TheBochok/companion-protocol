@@ -117,6 +117,10 @@ export default function CompanionApp() {
   const [mobileEmailSent, setMobileEmailSent] = useState(false)
   const [isSendingEmail, setIsSendingEmail] = useState(false)
   const [copiedLink, setCopiedLink] = useState(false)
+  const [appMode, setAppMode] = useState<'find' | 'create'>('find')
+  const [creatorEmail, setCreatorEmail] = useState('')
+  const [creatorEmailSent, setCreatorEmailSent] = useState(false)
+  const [isSendingCreatorEmail, setIsSendingCreatorEmail] = useState(false)
   const liveGoalRef = useRef(goal)
   const liveInstructionRef = useRef('')
 
@@ -388,6 +392,20 @@ export default function CompanionApp() {
     setTimeout(() => setCopiedLink(false), 2000)
   }
 
+  async function handleCreatorSubmit() {
+    if (!creatorEmail.trim()) return
+    setIsSendingCreatorEmail(true)
+    try {
+      await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: `B2B early access request: ${creatorEmail}` }),
+      })
+    } catch { /* optimistic */ }
+    setCreatorEmailSent(true)
+    setIsSendingCreatorEmail(false)
+  }
+
   const isActive = status === 'active'
 
   return (
@@ -395,14 +413,46 @@ export default function CompanionApp() {
 
       {/* ── Top nav ── */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-slate-950/80 backdrop-blur-xl border-b border-white/[0.05]">
-        <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 h-14 grid grid-cols-3 items-center">
+          {/* Left: Logo */}
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-md bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center shadow-[0_0_10px_rgba(99,102,241,0.3)]">
               <div className="w-2 h-2 rounded-sm bg-indigo-400" />
             </div>
             <span className="text-[15px] font-bold text-white tracking-tight">Via</span>
           </div>
-          <div className="flex items-center gap-2">
+
+          {/* Center: Mode toggle (hidden during active guide) */}
+          <div className="flex justify-center">
+            {!isActive && (
+              <div className="flex items-center gap-1 bg-white/5 p-1 rounded-full border border-white/10">
+                <button
+                  onClick={() => setAppMode('find')}
+                  className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                    appMode === 'find'
+                      ? 'bg-white/10 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Find a Guide
+                </button>
+                <button
+                  onClick={() => setAppMode('create')}
+                  className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all ${
+                    appMode === 'create'
+                      ? 'bg-white/10 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Create Guides
+                  <span className="text-[9px] font-bold text-indigo-400 bg-indigo-500/15 border border-indigo-500/25 px-1.5 py-0.5 rounded-full">✨ Beta</span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Right: Feedback + Sign out */}
+          <div className="flex items-center justify-end gap-2">
             <button
               onClick={() => setShowFeedback(true)}
               className="flex items-center gap-1.5 text-indigo-300 hover:text-white border border-indigo-500/40 hover:border-indigo-400/60 bg-indigo-500/10 hover:bg-indigo-500/20 transition-all text-xs font-semibold px-3 py-1.5 rounded-lg shadow-[0_0_10px_rgba(99,102,241,0.15)]"
@@ -594,7 +644,7 @@ export default function CompanionApp() {
         )}
 
         {/* ── IDLE STATE ── */}
-        {!isActive && phase === 'idle' && (
+        {!isActive && phase === 'idle' && appMode === 'find' && (
           <div className="w-full max-w-2xl">
             <p className="text-center text-indigo-400 text-[11px] uppercase tracking-widest font-semibold mb-5">
               Visual AI Guide
@@ -659,6 +709,65 @@ export default function CompanionApp() {
               <span className="opacity-50">→</span>
               <span>3. Follow the Guide</span>
             </div>
+          </div>
+        )}
+
+        {/* ── CREATE GUIDES (B2B Lead Capture) ── */}
+        {!isActive && phase === 'idle' && appMode === 'create' && (
+          <div className="w-full max-w-2xl text-center">
+            {/* Glowing record icon */}
+            <div className="flex items-center justify-center mb-10">
+              <div className="relative">
+                <div className="absolute inset-0 rounded-full bg-indigo-500/20 blur-3xl scale-[2]" />
+                <div className="relative w-20 h-20 rounded-full bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center shadow-[0_0_48px_rgba(99,102,241,0.2)]">
+                  <div className="w-6 h-6 rounded-full bg-indigo-500 animate-pulse shadow-[0_0_20px_rgba(99,102,241,0.8)]" />
+                </div>
+              </div>
+            </div>
+
+            <h1 className="text-4xl font-bold text-white tracking-tight mb-4 leading-tight">
+              Stop writing documentation.<br />Start recording.
+            </h1>
+            <p className="text-lg text-slate-400 leading-relaxed mb-10 max-w-lg mx-auto">
+              Via for Teams lets you record any workflow and instantly share it as an interactive, on-screen guide. No more Zoom support calls or outdated Notion docs.
+            </p>
+
+            {/* Email capture */}
+            {creatorEmailSent ? (
+              <div className="flex items-center justify-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-5 py-4 max-w-sm mx-auto">
+                <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                </svg>
+                <p className="text-emerald-300 text-sm font-medium">You&apos;re on the list!</p>
+              </div>
+            ) : (
+              <div className="flex justify-center">
+                <div className="flex">
+                  <input
+                    type="email"
+                    placeholder="Enter your work email"
+                    value={creatorEmail}
+                    onChange={e => setCreatorEmail(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleCreatorSubmit()}
+                    className="w-64 h-12 bg-white/5 border border-white/10 rounded-l-xl px-4 text-white text-sm placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 transition-all"
+                  />
+                  <button
+                    onClick={handleCreatorSubmit}
+                    disabled={!creatorEmail.trim() || isSendingCreatorEmail}
+                    className="h-12 px-6 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-600/50 disabled:cursor-not-allowed text-white font-medium text-sm rounded-r-xl transition-all whitespace-nowrap"
+                  >
+                    {isSendingCreatorEmail
+                      ? <span className="inline-block w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      : 'Request Early Access'
+                    }
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs text-slate-500 mt-6 uppercase tracking-widest">
+              Currently onboarding design, engineering, and CS teams.
+            </p>
           </div>
         )}
 

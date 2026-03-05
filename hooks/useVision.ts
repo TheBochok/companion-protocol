@@ -277,12 +277,62 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
           const isScroll = /\bscroll\b|\bswipe\b/i.test(newInstruction)
           if (!isTabSwitch && !isScroll && Array.isArray(result.bbox) && result.bbox.length === 4) {
             const [ymin, xmin, ymax, xmax] = result.bbox
+            const origW = (xmax - xmin) / 1000
+            const origH = (ymax - ymin) / 1000
+            // Set coarse target immediately for responsive UI
             setTarget({
               x: xmin / 1000,
               y: ymin / 1000,
-              width: (xmax - xmin) / 1000,
-              height: (ymax - ymin) / 1000,
+              width: origW,
+              height: origH,
             })
+            // Zoom-refine: crop the bbox region with padding and ask Gemini for precise center
+            if (newInstruction !== 'Goal complete') {
+              const canvas = analysisCanvasRef.current
+              if (canvas && canvas.width > 0) {
+                const PAD = 0.4
+                const bw = xmax - xmin, bh = ymax - ymin
+                const rx0 = Math.max(0, xmin - bw * PAD)
+                const ry0 = Math.max(0, ymin - bh * PAD)
+                const rx1 = Math.min(1000, xmax + bw * PAD)
+                const ry1 = Math.min(1000, ymax + bh * PAD)
+                const cropCanvas = document.createElement('canvas')
+                cropCanvas.width = 400
+                cropCanvas.height = 400
+                const cropCtx = cropCanvas.getContext('2d')
+                if (cropCtx) {
+                  cropCtx.drawImage(
+                    canvas,
+                    (rx0 / 1000) * canvas.width, (ry0 / 1000) * canvas.height,
+                    ((rx1 - rx0) / 1000) * canvas.width, ((ry1 - ry0) / 1000) * canvas.height,
+                    0, 0, 400, 400,
+                  )
+                  const cropBase64 = cropCanvas.toDataURL('image/jpeg', 0.9).split(',')[1]
+                  fetch('/api/refine', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ imageBase64: cropBase64, instruction: newInstruction }),
+                  })
+                    .then(r => r.json())
+                    .then((refined: { cx?: number; cy?: number }) => {
+                      if (generationRef.current !== myGeneration) return
+                      if (prevInstructionRef.current !== newInstruction) return
+                      if (refined.cx == null || refined.cy == null) return
+                      // Map refined center (within crop) back to full-image 0–1 coords
+                      const fullX = (rx0 + (refined.cx / 1000) * (rx1 - rx0)) / 1000
+                      const fullY = (ry0 + (refined.cy / 1000) * (ry1 - ry0)) / 1000
+                      // Keep original bbox size but shift center to refined position
+                      setTarget({
+                        x: Math.max(0, fullX - origW / 2),
+                        y: Math.max(0, fullY - origH / 2),
+                        width: origW,
+                        height: origH,
+                      })
+                    })
+                    .catch(() => {})
+                }
+              }
+            }
           } else {
             setTarget(null)
           }

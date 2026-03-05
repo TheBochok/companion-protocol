@@ -291,23 +291,33 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
             // cropping the exact frame the main call analyzed, not the live canvas which may have advanced.
             if (newInstruction !== 'Goal complete') {
               const PAD = 0.4
+              const MIN_PAD = 60  // at least 6% of screen in each direction so tiny elements have context
               const bw = xmax - xmin, bh = ymax - ymin
-              const rx0 = Math.max(0, xmin - bw * PAD)
-              const ry0 = Math.max(0, ymin - bh * PAD)
-              const rx1 = Math.min(1000, xmax + bw * PAD)
-              const ry1 = Math.min(1000, ymax + bh * PAD)
+              const rx0 = Math.max(0, xmin - Math.max(bw * PAD, MIN_PAD))
+              const ry0 = Math.max(0, ymin - Math.max(bh * PAD, MIN_PAD))
+              const rx1 = Math.min(1000, xmax + Math.max(bw * PAD, MIN_PAD))
+              const ry1 = Math.min(1000, ymax + Math.max(bh * PAD, MIN_PAD))
               const img = new Image()
               img.onload = () => {
+                // Preserve crop aspect ratio so Gemini sees an undistorted image
+                const cropW_units = rx1 - rx0
+                const cropH_units = ry1 - ry0
+                const aspectRatio = cropW_units / cropH_units
                 const cropCanvas = document.createElement('canvas')
-                cropCanvas.width = 400
-                cropCanvas.height = 400
+                if (aspectRatio >= 1) {
+                  cropCanvas.width = 400
+                  cropCanvas.height = Math.max(40, Math.round(400 / aspectRatio))
+                } else {
+                  cropCanvas.height = 400
+                  cropCanvas.width = Math.max(40, Math.round(400 * aspectRatio))
+                }
                 const cropCtx = cropCanvas.getContext('2d')
                 if (!cropCtx) return
                 cropCtx.drawImage(
                   img,
                   (rx0 / 1000) * img.width, (ry0 / 1000) * img.height,
                   ((rx1 - rx0) / 1000) * img.width, ((ry1 - ry0) / 1000) * img.height,
-                  0, 0, 400, 400,
+                  0, 0, cropCanvas.width, cropCanvas.height,
                 )
                 const cropBase64 = cropCanvas.toDataURL('image/jpeg', 0.9).split(',')[1]
                 fetch('/api/refine', {

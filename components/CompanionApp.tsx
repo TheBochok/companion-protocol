@@ -686,7 +686,7 @@ export default function CompanionApp() {
             {/* Quick Start example chips */}
             <div className="flex flex-wrap justify-center gap-2 mt-5">
               {[
-                { icon: '📚', text: 'Find a paper on computer vision on arXiv' },
+                { icon: '📚', text: 'Find and download a computer vision paper on arXiv' },
                 { icon: '🎨', text: 'Resize a canvas in Photopea' },
                 { icon: '🔍', text: 'View the edit history on Wikipedia' },
               ].map(({ icon, text }) => (

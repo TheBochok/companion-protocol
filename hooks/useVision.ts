@@ -61,6 +61,12 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
   const consecutiveCompleteRef = useRef(0)
   const COMPLETIONS_REQUIRED = 2
 
+  // Require N consecutive identical responses before switching to a new instruction.
+  // Prevents jumpy / contradicting guidance when the model oscillates between two options.
+  const pendingInstructionRef = useRef('')
+  const pendingCountRef = useRef(0)
+  const SWITCH_CONFIRM = 2
+
   // Analytics: track the last logged event id so we can update its acted status later
   const lastEventIdRef = useRef<string | null>(null)
 
@@ -93,6 +99,8 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
       prevInstructionRef.current = ''
       prevFrameRef.current = ''
       consecutiveCompleteRef.current = 0
+      pendingInstructionRef.current = ''
+      pendingCountRef.current = 0
       memoryRef.current = ''
       return
     }
@@ -234,6 +242,26 @@ export function useVision(stream: MediaStream | null, goal: string, sessionId: s
             if (consecutiveCompleteRef.current < COMPLETIONS_REQUIRED) return
           } else {
             consecutiveCompleteRef.current = 0
+          }
+
+          // Debounce instruction switches: require SWITCH_CONFIRM consecutive identical
+          // responses before moving away from the current instruction. This stops the
+          // guide from oscillating between two contradicting steps on ambiguous frames.
+          if (!isComplete && newInstruction !== prevInstructionRef.current && prevInstructionRef.current) {
+            if (newInstruction === pendingInstructionRef.current) {
+              pendingCountRef.current += 1
+            } else {
+              pendingInstructionRef.current = newInstruction
+              pendingCountRef.current = 1
+            }
+            if (pendingCountRef.current < SWITCH_CONFIRM) return
+            // Confirmed — clear pending state and fall through to commit the new instruction
+            pendingInstructionRef.current = ''
+            pendingCountRef.current = 0
+          } else if (newInstruction === prevInstructionRef.current) {
+            // Same as current — reset any pending candidate
+            pendingInstructionRef.current = ''
+            pendingCountRef.current = 0
           }
 
           // Analytics: when instruction changes, mark previous as acted and log new

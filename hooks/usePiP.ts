@@ -18,6 +18,7 @@ export interface PiPRenderProps {
   onFeedback: (rating: 'up' | 'down', reason?: string) => void
   chatMessages: { role: 'user' | 'ai'; content: string }[]
   onChat: (msg: string) => Promise<string>
+  isProcessing?: boolean
 }
 
 interface UsePiPReturn {
@@ -59,6 +60,11 @@ const CRITICAL_CSS = `
   .pip-pulse      { animation: pip-pulse      2s    ease-in-out infinite; }
   .pip-swipe-up   { animation: pip-swipe-up   1.3s  ease-in-out infinite; }
   .pip-swipe-down { animation: pip-swipe-down 1.3s  ease-in-out infinite; }
+  @keyframes pip-think {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.2; }
+  }
+  .pip-think { animation: pip-think 0.55s ease-in-out infinite; }
 `
 
 export function usePiP(): UsePiPReturn {

@@ -199,9 +199,9 @@ export default function CompanionApp() {
   // ── Document PiP: keep overlay in sync ────────────────────────────────────
   useEffect(() => {
     if (status !== 'active' || pipMode !== 'document') return
-    updatePiP({ stream, target, instruction: currentInstruction, onCancel: handleEndGuide, triggerFeedback, onFeedback: handleFeedback, chatMessages: liveChatMessages, onChat: handleChat })
+    updatePiP({ stream, target, instruction: currentInstruction, isProcessing, onCancel: handleEndGuide, triggerFeedback, onFeedback: handleFeedback, chatMessages: liveChatMessages, onChat: handleChat })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, pipMode, pipStatus, stream, target, currentInstruction, triggerFeedback, liveChatMessages])
+  }, [status, pipMode, pipStatus, stream, target, currentInstruction, isProcessing, triggerFeedback, liveChatMessages])
 
   // ── Canvas PiP fallback: resize output canvas to match video stream ───────
   useEffect(() => {

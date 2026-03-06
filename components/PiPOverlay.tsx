@@ -46,7 +46,7 @@ function useVideoDisplayArea(videoEl: HTMLVideoElement | null) {
 
 type FbState = 'none' | 'rating' | 'reason' | 'thanks'
 
-export default function PiPOverlay({ stream, target, instruction, onCancel, triggerFeedback, onFeedback, chatMessages, onChat }: PiPRenderProps) {
+export default function PiPOverlay({ stream, target, instruction, onCancel, triggerFeedback, onFeedback, chatMessages, onChat, isProcessing = false }: PiPRenderProps) {
   const videoRef          = useRef<HTMLVideoElement | null>(null)
   const videoContainerRef = useRef<HTMLDivElement | null>(null)
   const [videoEl, setVideoEl] = useState<HTMLVideoElement | null>(null)
@@ -268,11 +268,12 @@ export default function PiPOverlay({ stream, target, instruction, onCancel, trig
           {[0, 1, 2].map((i) => (
             <div
               key={i}
-              className="pip-pulse"
+              className={isProcessing ? 'pip-think' : 'pip-pulse'}
               style={{
                 width: 8, height: 8, borderRadius: '50%',
-                background: '#6366f1',
-                animationDelay: `${i * 0.22}s`,
+                background: isProcessing ? 'rgba(255,255,255,0.85)' : '#6366f1',
+                animationDelay: `${i * (isProcessing ? 0.12 : 0.22)}s`,
+                transition: 'background 0.3s',
               }}
             />
           ))}
@@ -416,6 +417,18 @@ export default function PiPOverlay({ stream, target, instruction, onCancel, trig
         >
           {/* Chat toggle */}
           <ChatToggle open={chatOpen} onClick={() => setChatOpen(o => !o)} unread={chatMessages.length > 0 && !chatOpen} />
+
+          {/* Processing indicator dot */}
+          <div
+            className={isProcessing ? 'pip-think' : undefined}
+            style={{
+              flexShrink: 0,
+              width: 6, height: 6, borderRadius: '50%',
+              background: isProcessing ? '#818cf8' : '#1e293b',
+              boxShadow: isProcessing ? '0 0 7px rgba(99,102,241,0.9)' : 'none',
+              transition: 'background 0.4s, box-shadow 0.4s',
+            }}
+          />
 
           {/* Instruction */}
           <span style={{

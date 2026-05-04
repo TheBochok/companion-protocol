@@ -2,67 +2,73 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Status
-
-This project is in the **architectural/planning phase** — only documentation exists. The implementation follows the four phases defined in `ARCHITECTURE.md`. When building, start from Phase 1 and progress sequentially.
-
 ## Commands
-
-Once the project is scaffolded (Next.js 14):
 
 ```bash
 npm install       # Install dependencies
-npm run dev       # Start dev server at http://localhost:3000
-npm run build     # Production build
-npm run lint      # ESLint
+npm run dev       # Dev server at http://localhost:3000
+npm run build     # Production build (uses `output: 'standalone'`)
+npm run lint      # ESLint via next lint
+npm start         # Serve standalone build; reads $PORT
 ```
 
-## Architecture
+There is no test suite. Required env vars: `GEMINI_API_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SITE_URL` (used by the OAuth callback).
 
-The Companion Protocol is a browser-native workflow guidance tool. It works by:
-1. Capturing the user's screen via `getDisplayMedia()`
-2. Running OCR (Tesseract.js) on snapshots locally at ~1 FPS
-3. Matching detected text against a `workflow` config (trigger/instruction pairs)
-4. Displaying the current instruction in a floating Picture-in-Picture (PiP) window via `canvas.captureStream()` → `<video>.requestPictureInPicture()`
+Note: this is Next.js 14 — config must be `next.config.mjs` (not `.ts`).
 
-**All processing is local — no data leaves the browser.**
+## High-Level Architecture
 
-### Tech Stack
+**Via** is a browser-native visual AI guide. The user states a goal in natural language, shares their screen, and the app overlays step-by-step pointers in a Picture-in-Picture window. There is no "workflow config" anymore — guidance is generated on the fly by Gemini from the live screen + the user's goal. The `lib/workflow.ts` / `store/workflowStore.ts` files are legacy and unused.
 
-- **Next.js 14** (App Router)
-- **Tailwind CSS**
-- **Zustand** — workflow state machine
-- **Tesseract.js** — OCR on captured frames
-- **HTML5 Canvas API** — `outputCanvas` (400×150px display) and `analysisCanvas` (hidden, for snapshots)
-- **Web APIs** — `MediaDevices.getDisplayMedia`, `HTMLVideoElement.requestPictureInPicture`, `HTMLCanvasElement.captureStream`
+### Request flow on each captured frame
 
-### Key Hooks (to be implemented)
+1. `useScreenShare` calls `getDisplayMedia` and exposes a `MediaStream`.
+2. `useVision` (the orchestrator — most logic lives here) attaches the stream to a hidden `<video>`, runs a 150ms diff loop against a tiny 64×36 canvas, and only fires a real OCR call when pixels change beyond `CHANGE_THRESHOLD` or the 2s heartbeat elapses.
+3. On a change, it draws the frame to `analysisCanvas` (capped at 1920×1080), sends JPEG base64 to `/api/vision` along with: goal, prior `currentInstruction`, completed-step `history`, optional one-shot `userContext` (from chat), and a Gemini-managed `memory` string.
+4. `/api/vision` calls Gemini (`gemini-3.1-flash-lite-preview`, `thinkingBudget: 0`) with the previous + current screenshots and a long prompt that constrains it to return `{ instruction, bbox: [ymin, xmin, ymax, xmax] in 0–1000, memory }`.
+5. If a bbox is returned, `useVision` immediately sets the coarse `target` in `coordinateStore` for responsive UI, then fires `/api/refine` with a padded crop of the same frame to get a more precise click center (`cx`, `cy`), and updates the target.
+6. `PiPOverlay` (rendered into the Document PiP window via `ReactDOM.createRoot`) reads `target` from the store and draws a glowing dot + ping ring + zoom animation, with the instruction in a floating glass pill.
 
-| Hook | Responsibility |
-|------|---------------|
-| `useScreenShare` | Calls `getDisplayMedia`, manages stream lifecycle and permission errors |
-| `usePiP` | Connects `outputCanvas.captureStream(30)` to a hidden `<video>`, exposes `togglePiP()` |
-| `useVision` | 1000ms loop: draws frame → `analysisCanvas` → `Tesseract.recognize()` → returns normalized `foundText` |
-| `useGuide` | Subscribes to `foundText`, advances workflow steps when trigger keyword is detected, returns `currentInstruction` |
+### Critical behaviors that are not obvious from a single file
 
-### Workflow Config Shape
+- **Generation counter for cancellation.** `useVision` keeps `generationRef`. `forceInstruction` (called from chat replies) increments it; any in-flight Gemini response whose `myGeneration` no longer matches is silently discarded. This is how chat overrides race with vision without flicker.
+- **Two-confirmation debouncing.** `SWITCH_CONFIRM = 2` and `COMPLETIONS_REQUIRED = 2`: the model must agree on a new instruction (or on "Goal complete") for two consecutive frames before the UI switches. Single-frame oscillations are absorbed.
+- **AbortController on big diffs.** If a major scene change (`BIG_CHANGE_THRESHOLD = 0.08`) happens while a request is in flight, the in-flight request is aborted and a new one fires immediately.
+- **Pre-flight research.** When a stream first attaches with a goal, `useVision` fires `/api/research` (Gemini + Google Search grounding) once and stores the result in `memoryRef`, which gets injected into every subsequent vision call as background context.
+- **Tab/scroll instructions skip bbox.** If the instruction matches `/switch.{0,20}tab/i` or `/scroll|swipe/i`, the target is cleared and the overlay shows a swipe animation instead of a dot.
 
-```json
-[
-  { "step": 1, "trigger": "settings", "instruction": "Click 'Settings' in the sidebar" },
-  { "step": 2, "trigger": "api keys", "instruction": "Select 'API Keys' tab" }
-]
-```
+### PiP architecture
 
-### PiP Canvas Rendering
+- Primary path: **Document Picture-in-Picture** (Chrome 116+, `window.documentPictureInPicture.requestWindow`). All main-document stylesheets are cloned into the PiP window, plus a `CRITICAL_CSS` block of keyframes (`pip-ping`, `pip-slide-up`, `pip-pulse`, `pip-swipe-up/down`, `pip-think`). A React root is mounted into a div in the PiP `body`. Because both windows share the JS context, the same Zustand store and React state work seamlessly — `CompanionApp` calls `updatePiP(props)` from a `useEffect` whenever inputs change.
+- Fallback: **Canvas PiP** (`canvas.captureStream(30) → <video>.requestPictureInPicture()`), used when Document PiP isn't available. In this mode `outputCanvas` is drawn by a RAF loop in `CompanionApp` using helpers in `lib/drawCanvas.ts`.
+- Both `getDisplayMedia()` and `requestWindow()` need user activation; `handleStartGuide` chains them in a single click handler so the screen-share grant carries activation through to the PiP call.
 
-`outputCanvas` (400×150px) uses black background with large yellow centered text. The canvas stream feeds into a hidden `<video>` element that enters PiP mode — this is the only way to render custom content in a PiP window (browsers only allow video elements in PiP, not arbitrary DOM).
+### Auth & routing
 
-### Phase Build Order
+- Route groups: `app/(marketing)` (landing, login, signup, OAuth callback) and `app/(companion)` (the actual app at `/app`).
+- `middleware.ts` does two things:
+  1. Rewrites the `app.usevia.tech` subdomain to `/app/*` internally (no browser redirect).
+  2. Refreshes the Supabase session cookie and gates `/app/**` (redirect to `/login`) and `/login`/`/signup` (redirect to `/app` if already signed in).
+- `app/(companion)/layout.tsx` re-checks auth server-side as defense in depth.
+- `lib/supabase/client.ts` (browser, `createBrowserClient`) and `lib/supabase/server.ts` (SSR with `next/headers` cookies) are the two factories. API routes that write to Postgres use a **third** client built from `SUPABASE_SERVICE_ROLE_KEY` directly (`@supabase/supabase-js`) because the analytics/feedback tables have all Data API access revoked — only the service role can reach them.
 
-1. **Phase 1 (Engine):** Screen capture + PiP with static "Hello World" canvas content
-2. **Phase 2 (Vision):** Add OCR loop, show live detected text in debug UI
-3. **Phase 3 (Brain):** Connect vision output to workflow state machine, render instructions to canvas
-4. **Phase 4 (Polish):** "Connection Lost" / "Scanning..." states, production deployment config
+### API routes (all server-side Gemini proxies + Supabase writers)
 
-Detailed AI prompts for building each phase are in `ARCHITECTURE.md`.
+| Route | Purpose |
+|---|---|
+| `POST /api/vision` | Per-frame guidance — returns `{instruction, bbox, memory}`. Most prompt-engineering lives here. |
+| `POST /api/refine` | Zoom-refine the click center inside the bbox crop. |
+| `POST /api/chat` | User asks Via a question; returns `{reply, instruction}`. The instruction is force-applied via `forceInstruction`. |
+| `POST /api/clarify` | Pre-flight: decide if the goal is specific enough or ask one question. Defaults to `ready: true` on any failure. |
+| `POST /api/research` | One-shot background briefing on the goal (Gemini + Google Search grounding). |
+| `POST /api/feedback` | Free-form user feedback → `general_feedback` table. |
+| `POST/PATCH/PUT /api/analytics` | Insert/update `guidance_events` (per-instruction with screenshot keyframe + `acted` flag) and `session_feedback` (👍/👎 + reason). |
+
+### State stores
+
+- `useCoordinateStore` — single `target: {x, y, width, height} | null` in normalized 0–1 coords. The only cross-component channel for the bbox.
+- `useWorkflowStore` — **legacy, unused at runtime.** Kept around with `lib/workflow.ts` and `components/WorkflowEditor.tsx` from the original trigger-based design.
+
+### UI states in `CompanionApp`
+
+Three phases: `idle` (goal entry, with mode toggle for "Find a Guide" vs "Create Guides" lead capture) → `clarifying` (chat with `/api/clarify`, max 2 AI turns before forcing ready) → `active` (PiP open, live chat panel mirrored between the in-page card and the PiP overlay via `liveChatMessages` + `onChat`). Plus a mobile fallback (no `getDisplayMedia` on touch devices) with email reminder capture.
